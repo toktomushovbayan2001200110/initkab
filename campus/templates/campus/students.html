@@ -1,0 +1,20 @@
+{% extends "campus/base.html" %}
+{% block title %}Студенты{% endblock %}
+{% block content %}
+<h1>Студенты</h1>
+<p class="sub">Эти люди ходят по корпусу в 3D-модели. В одной группе помещается до {{ max_size }} человек. После изменений обновите страницу модели.</p>
+<div class="row" style="margin-bottom:12px"><a class="btn primary" href="{% url 'student_add' %}{% if gid %}?group={{ gid }}{% endif %}">+ Добавить студента</a><a class="btn" href="{% url 'students_import' %}">Загрузить список группы</a></div>
+<form class="filters" method="get">
+  <input type="text" name="q" value="{{ q }}" placeholder="Поиск по фамилии или имени">
+  <select name="group" onchange="this.form.submit()"><option value="">Все группы</option>{% for g in groups %}<option value="{{ g.id }}"{% if gid == g.id|stringformat:"s" %} selected{% endif %}>{{ g.name }} ({{ g.n }})</option>{% endfor %}</select>
+  <button>Найти</button>
+</form>
+<div class="tablewrap"><table>
+<tr><th>Фамилия и имя</th><th>Группа</th><th>Пол</th><th>Характер</th><th>Статус</th><th></th></tr>
+{% for s in students %}<tr>
+  <td><a href="{% url 'student_edit' s.id %}">{{ s.last_name }} {{ s.first_name }}</a></td><td>{{ s.group.name }}</td><td>{{ s.get_gender_display }}</td><td>{{ s.get_character_display }}</td>
+  <td>{% if s.active %}<span class="tag">учится</span>{% else %}<span class="tag off">скрыт</span>{% endif %}</td>
+  <td class="act"><form method="post" action="{% url 'student_delete' s.id %}" onsubmit="return confirm('Удалить студента {{ s.last_name|escapejs }} {{ s.first_name|escapejs }}?')">{% csrf_token %}<button class="small danger">Удалить</button></form></td>
+</tr>{% empty %}<tr><td colspan="6" class="muted">Никого не нашлось.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

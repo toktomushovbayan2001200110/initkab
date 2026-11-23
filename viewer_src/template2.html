@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Живой корпус КГУ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#e9ecef; --panel:#fbfcfd; --fg:#1d2630; --muted:#5d6b78; --line:#cfd6dd;
+  --accent:#1f5fa8; --accent-fg:#ffffff; --chip:#eef2f6;
+  --f-display:"Unbounded",system-ui,sans-serif; --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a20; --panel:#1c242c; --fg:#e4eaf0; --muted:#94a3b1; --line:#2f3a45; --accent:#6aa6ea; --accent-fg:#0d1620; --chip:#25303a; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141a20; --panel:#1c242c; --fg:#e4eaf0; --muted:#94a3b1; --line:#2f3a45; --accent:#6aa6ea; --accent-fg:#0d1620; --chip:#25303a; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);overflow:hidden}
+#app{position:relative;height:100%;width:100%}
+#view{position:absolute;inset:0;z-index:0}
+#view canvas{display:block;touch-action:none}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.12);z-index:5}
+#ctrl{top:max(12px,env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));width:276px;padding:14px;display:flex;flex-direction:column;gap:12px;max-height:calc(100% - 24px);overflow:auto}
+h1{font-family:var(--f-display);font-size:15px;font-weight:600;margin:0;line-height:1.3;text-wrap:balance}
+.sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+.grp{display:flex;flex-direction:column;gap:6px}
+.lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+button{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:6px;padding:6px 9px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.tog{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.tog input{accent-color:var(--accent);width:15px;height:15px}
+#exp{top:max(12px,env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:290px;max-height:calc(100% - 24px);overflow:auto;padding:14px}
+#exp h2{font-family:var(--f-display);font-size:13px;font-weight:500;margin:0 0 8px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-weight:500;color:var(--muted);text-align:right;padding:4px;font-size:11px}
+th:first-child{text-align:left}
+td{padding:5px 4px;border-top:1px solid var(--line);vertical-align:top}
+td.a{font-family:var(--f-mono);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.fl{cursor:pointer} tr.fl:hover td{background:var(--chip)}
+.note{font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:10px}
+#pick{margin-top:10px;font-size:12.5px;line-height:1.45;padding:8px 10px;border-radius:8px;background:var(--chip);display:none}
+#pick b{font-family:var(--f-mono);font-weight:500}
+.hint{position:absolute;bottom:max(12px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:5px 10px;border-radius:20px;z-index:4;white-space:nowrap}
+#load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:20;font-family:var(--f-display);font-size:14px;color:var(--muted);background:var(--bg)}
+#mtop,#mbar,.sheetClose{display:none}
+@media (max-width:760px){
+  #mtop{display:flex;position:absolute;z-index:5;top:max(10px,env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));align-items:center;justify-content:space-between;gap:8px;pointer-events:none}
+  #mtop b{font-family:var(--f-display);font-size:14px;font-weight:600;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:7px 13px;box-shadow:0 4px 14px rgba(0,0,0,.12);pointer-events:auto}
+  #mbar{display:flex;position:absolute;z-index:6;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));bottom:max(10px,env(safe-area-inset-bottom,0px));gap:6px;padding:7px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+  #mbar button{flex:1;min-height:44px;font-size:13.5px;padding:6px 4px;border-radius:11px}
+  #mbar .mf{display:flex;flex:4;gap:4px}
+  #mbar .mm{flex:1.3;font-size:18px}
+  #ctrl,#exp{display:none;left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));width:auto;top:auto;bottom:calc(max(10px,env(safe-area-inset-bottom,0px)) + 72px);max-height:58%;border-radius:16px;padding:14px 14px 16px;overflow:auto}
+  body.menu-open #ctrl{display:flex} body.exp-open #exp{display:block}
+  #ctrl .grp.floorsG,#ctrl .head{display:none}
+  .sheetClose{display:block;align-self:flex-end;font-size:15px;padding:4px 10px;margin:-6px -6px 0 auto}
+  .hint{display:none}
+}
+#bubbles,#roomtags{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.bub{position:absolute;left:0;top:0;max-width:190px;font-size:11.5px;line-height:1.3;color:#1d2630;background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:10px;padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,.18);white-space:normal;text-align:center}
+.bub::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-5px;border:5px solid transparent;border-top-color:#fff;border-bottom:0}
+.bub.t{background:#fff6dc}.bub.t::after{border-top-color:#fff6dc}
+#liveBan{display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:6;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.18);max-width:min(560px,calc(100% - 32px));text-align:center}#liveBan button{margin-left:8px}
+.live{color:#e5484d;font-weight:600}
+#bellToast{position:absolute;top:60px;left:50%;transform:translate(-50%,-10px);z-index:7;background:#fff6dc;color:#3a2d00;border:1px solid #e9c46a;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap}
+#bellToast.on{opacity:1;transform:translate(-50%,0)}
+body.photo .panel,body.photo #mbar,body.photo .hint,body.photo #liveBan,body.photo #bellToast,body.photo #bubbles,body.photo #mtop{display:none!important}
+#todayBox h2{margin-top:0}#todayBox .today{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:6px 0 10px}
+#todayBox .today div{background:var(--chip);border-radius:6px;padding:5px 4px;text-align:center}#todayBox .today b{display:block;font-size:14px}#todayBox .today span{font-size:9.5px;word-break:break-word;color:var(--muted);line-height:1.15;display:block}
+#todayBox .rank{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:12px;margin-bottom:14px;align-items:baseline}#todayBox .rank a{color:var(--accent);cursor:pointer;text-decoration:underline}#todayBox .rank span{color:var(--muted);font-size:11px;margin-left:4px}
+.rtag{position:absolute;left:0;top:0;font-size:10.5px;line-height:1.2;color:#1d2630;background:rgba(255,255,255,.78);border-radius:5px;padding:2px 6px;white-space:nowrap}
+.rtag b{font-family:var(--f-mono);font-weight:500;color:#1f5fa8;margin-right:4px}
+.clock{display:flex;align-items:baseline;gap:8px}.clock b{font-family:var(--f-mono);font-size:22px;font-weight:500;font-variant-numeric:tabular-nums}.clock span{font-size:12px;color:var(--muted)}
+.sstat{font-size:12.5px;line-height:1.45}.sstat span{color:var(--muted);font-size:11.5px}
+#npcCard{display:none;margin-bottom:12px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--chip);font-size:12.5px;line-height:1.45}
+#npcCard .nh{display:flex;gap:10px;align-items:center;margin-bottom:6px}
+#npcCard .av{flex:none;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-family:var(--f-display);font-size:14px}
+#npcCard .ns{color:var(--muted);font-size:11.5px}
+#npcCard .na{font-weight:500;margin:4px 0 2px}
+#npcCard .nt{margin:6px 0 2px;font-style:italic}
+#npcCard .nb{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:3px}
+#npcCard .nb span{width:58px}#npcCard .nb i{flex:1;height:5px;border-radius:3px;background:var(--line);overflow:hidden}#npcCard .nb em{display:block;height:100%;background:var(--accent)}
+#npcCard .seg{margin-top:8px}
+#ticker{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(max(12px,env(safe-area-inset-bottom,0px)) + 34px);width:min(760px,calc(100% - 640px));min-width:300px;z-index:4;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 12px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);overflow:hidden}
+#ticker em{font-style:normal;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:#fff;background:#e5484d;border-radius:12px;padding:3px 8px;font-weight:600;flex:none}
+#ticker .tkw{overflow:hidden;flex:1;-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+#ticker .tk{display:flex;white-space:nowrap;width:max-content;animation:tk 40s linear infinite}
+#ticker .tk span{padding-right:48px}#ticker i{font-style:normal;color:var(--muted);margin:0 10px}#ticker b{font-weight:600}#ticker b.ann{color:#e5484d}
+@keyframes tk{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){#ticker .tk{animation-duration:160s!important}}
+#moods{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.mood{position:absolute;left:0;top:0;font-size:17px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));transform-origin:50% 100%}
+#evStat{display:none;margin-top:2px}#evStat .evOn{color:#e5484d}
+#adminBox{border:1px solid var(--line);border-radius:10px;padding:10px;background:linear-gradient(180deg,rgba(229,72,77,.06),transparent 60%)}
+#adminBox .lbl span{text-transform:none;letter-spacing:0;font-weight:500;color:var(--accent)}
+.arow{display:flex;align-items:center;gap:6px;font-size:12.5px}.arow select,.arow input:not([type=range]){flex:1;min-width:0;font:inherit;font-size:12.5px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--chip);color:var(--fg)}
+.arow input[type=range]{flex:1;accent-color:var(--accent)}.arow b{font-family:var(--f-mono);font-weight:500;font-size:12px;width:38px;text-align:right}
+#adminBox details summary{cursor:pointer;font-size:12.5px;margin:2px 0 6px}#adminBox .sch{display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;border-top:1px solid var(--line)}#adminBox .sch button{margin-left:auto;padding:2px 7px}
+#adminBox .ns,#npcEdit .ns{font-size:11.5px;color:var(--muted)}
+#npcEdit{display:none;margin:-4px 0 12px;padding:10px;border:1px dashed var(--accent);border-radius:8px}#npcEdit .arow{margin:6px 0}
+#alarmFx{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:0;box-shadow:inset 0 0 120px 30px rgba(229,30,40,.55)}
+body.alarm #alarmFx{animation:alrm 1s ease-in-out infinite}@keyframes alrm{50%{opacity:1}}
+#fpvHud{display:none;position:absolute;inset:0;pointer-events:none;z-index:6}
+body.fpv #fpvHud{display:block}body.fpv #ctrl,body.fpv #exp,body.fpv .hint,body.fpv #mbar,body.fpv #liveBan,body.fpv #mtop{display:none!important}
+.fpvTop{position:absolute;top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;pointer-events:auto}
+.fpvTop b{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;white-space:nowrap}
+#fpvAct{position:absolute;left:50%;transform:translateX(-50%);bottom:110px;display:flex;gap:8px;pointer-events:auto}#fpvAct button{font-size:14px;padding:9px 14px;background:var(--accent);color:var(--accent-fg);border-color:var(--accent);box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.fpvPad{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:max(20px,env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:auto}.fpvPad div{display:flex;gap:4px}.fpvPad button{width:48px;height:44px;font-size:16px;opacity:.85}
+.fpvHint{position:absolute;bottom:max(14px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:5px 10px;border-radius:20px;white-space:nowrap}
+body.fpv #ticker{bottom:52px}
+body.photo #ticker,body.photo #moods,body.photo #fpvHud{display:none!important}
+@media (max-width:760px){#ticker{width:auto;left:10px;right:10px;transform:none;min-width:0;bottom:calc(max(10px,env(safe-area-inset-bottom,0px)) + 80px)}.fpvHint{display:none}#fpvAct{bottom:150px}}
+@media (min-width:761px) and (max-width:1200px){#ticker{width:calc(100% - 640px)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="view"></div>
+  <div id="load">Загрузка модели…</div>
+  <div id="mtop"><b>КГУ · 1 корпус</b></div>
+  <div id="ctrl" class="panel">
+    <button class="sheetClose" data-close aria-label="Закрыть">✕</button>
+    <div class="head">
+      <h1>КГУ им. И. Арабаева · 1 корпус</h1>
+      <div class="sub" id="sub">3D-макет по проекту ArchiCAD. Весь 3 этаж — Институт новых информационных технологий: студенты, преподаватели и IT-отдел живут по расписанию пар.</div>
+    </div>
+    <div class="grp floorsG">
+      <div class="lbl">Этаж</div>
+      <div class="seg" id="floors">
+        <button data-f="all" class="on">Всё здание</button>
+        <button data-f="2">3 этаж · ИНИТ</button>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="lbl">Вид</div>
+      <div class="seg" id="views">
+        <button data-v="iso" class="on">3D</button>
+        <button data-v="top">Сверху</button>
+        <button data-v="s">Фасад Ю</button>
+        <button data-v="n">Фасад С</button>
+        <button data-v="w">Фасад З</button>
+        <button data-v="e">Фасад В</button>
+      </div>
+    </div>
+    <div class="grp">
+      <label class="tog"><input type="checkbox" id="cRoof" checked> Кровля</label>
+      <label class="tog"><input type="checkbox" id="cFurn" checked> Мебель и оборудование</label>
+      <label class="tog"><input type="checkbox" id="cExplode"> Разнести этажи</label>
+      <label class="tog"><input type="checkbox" id="cRotate"> Автовращение</label>
+    </div>
+  </div>
+  <div id="exp" class="panel">
+    <button class="sheetClose" data-close aria-label="Закрыть">✕</button>
+    <h2>Состав модели</h2>
+    <table id="tbl"></table>
+    <div id="pick"></div>
+    <div class="note" id="dims"></div>
+    <div class="note">Нажмите на человечка, чтобы открыть его карточку: кто это, что делает, о чём думает и с кем дружит. Модель живёт по реальному времени Бишкека: две смены, пары по 80 минут, вечером все расходятся.</div>
+  </div>
+  <div id="mbar">
+    <div class="mf" id="mFloors">
+      <button data-f="all" class="on">Здание</button><button data-f="2">3 этаж · ИНИТ</button>
+    </div>
+    <button class="mm" id="mMenu" aria-label="Настройки">☰</button>
+    <button class="mm" id="mInfo" aria-label="Состав">ℹ</button>
+  </div>
+  <div class="hint">ЛКМ — вращать · ПКМ — сдвиг · колесо — к курсору · двойной клик — фокус · WASD — движение</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script id="simdata" type="application/json">__SIM__</script>
+<script>
+const DATA_B64="__DATA__";
+const TYPE_RU={IfcWallStandardCase:'Стены',IfcWall:'Стены',IfcWindow:'Окна',IfcDoor:'Двери',IfcSlab:'Перекрытия',IfcStair:'Лестницы',IfcRailing:'Ограждения',
+  IfcFurnishingElement:'Мебель',IfcBuildingElementProxy:'Оборудование',IfcEnergyConversionDevice:'Радиаторы',IfcFlowTerminal:'Сантехника'};
+const ONE_RU={IfcWallStandardCase:'Стена',IfcWall:'Стена',IfcWindow:'Окно',IfcDoor:'Дверь',IfcSlab:'Перекрытие',IfcStair:'Лестница',IfcRailing:'Ограждение',
+  IfcFurnishingElement:'Мебель',IfcBuildingElementProxy:'Объект',IfcEnergyConversionDevice:'Радиатор',IfcFlowTerminal:'Сантехприбор',IfcRoof:'Кровля'};
+const FURN=new Set(['IfcFurnishingElement','IfcBuildingElementProxy','IfcEnergyConversionDevice','IfcFlowTerminal']);
+const FLOOR_NAMES=['1 этаж','2 этаж','3 этаж','Чердак / кровля'];
+
+async function loadData(){
+  const raw=Uint8Array.from(atob(DATA_B64),c=>c.charCodeAt(0));
+  const ds=new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const buf=await new Response(ds).arrayBuffer();
+  const jl=new DataView(buf).getUint32(0,true);
+  const json=JSON.parse(new TextDecoder().decode(new Uint8Array(buf,4,jl)));
+  let bo=4+jl; bo=(bo+3)&~3;
+  return {J:json,B:buf.slice(bo)};
+}
+
+const host=document.getElementById('view');
+const LITE=location.search.includes('lite');
+const MOBILE=LITE||matchMedia('(max-width:760px), (pointer:coarse)').matches;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(LITE?1:Math.min(devicePixelRatio,MOBILE?1.5:2));
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+THREE.ColorManagement.legacyMode=false;
+renderer.outputEncoding=THREE.sRGBEncoding; renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=0.95;
+host.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(40,1,0.1,1500);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true; controls.dampingFactor=0.09; controls.rotateSpeed=0.55; controls.panSpeed=0.9; controls.zoomSpeed=0.9;
+controls.maxPolarAngle=Math.PI*0.485; controls.minDistance=1.2; controls.maxDistance=320;
+
+function skyMaterial(){
+  return new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
+    uniforms:{top:{value:new THREE.Color(0x3f7fc4)},hor:{value:new THREE.Color(0xdbe7f1)},bot:{value:new THREE.Color(0x7d8471)}},
+    vertexShader:'varying vec3 vD; void main(){ vD=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader:'uniform vec3 top,hor,bot; varying vec3 vD; void main(){ float h=vD.y; vec3 c = h>0.0 ? mix(hor,top,pow(h,0.55)) : mix(hor,bot,pow(-h,0.35)); gl_FragColor=vec4(c,1.0); }'});
+}
+const sky=new THREE.Mesh(new THREE.SphereGeometry(900,32,16),skyMaterial()); scene.add(sky);
+scene.fog=new THREE.Fog(0xdbe7f1,200,800);
+(function(){
+  const es=new THREE.Scene(); es.add(new THREE.Mesh(new THREE.SphereGeometry(50,32,16),skyMaterial()));
+  const sb=new THREE.Mesh(new THREE.SphereGeometry(4,16,8),new THREE.MeshBasicMaterial({color:0xfff3d6})); sb.position.set(-25,28,18); es.add(sb);
+  scene.environment=new THREE.PMREMGenerator(renderer).fromScene(es,0.03).texture;
+})();
+const hemi=new THREE.HemisphereLight(0xdbeaff,0x6d6a5c,0.55); scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xfff1dc,2.0);
+sun.position.set(-45,60,35); sun.castShadow=true;
+sun.shadow.mapSize.set(LITE?1024:MOBILE?2048:4096,LITE?1024:MOBILE?2048:4096); sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.04;
+Object.assign(sun.shadow.camera,{left:-55,right:55,top:55,bottom:-55,near:1,far:200});
+scene.add(sun);
+
+// ground: lawn + paved apron around the building
+function canvasTex(px,draw,rep){const c=document.createElement('canvas');c.width=c.height=px;draw(c.getContext('2d'),px);
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=renderer.capabilities.getMaxAnisotropy();if(rep)t.repeat.set(rep,rep);return t;}
+const grassT=canvasTex(256,(g,n)=>{g.fillStyle='#6f8a4a';g.fillRect(0,0,n,n);for(let i=0;i<5000;i++){g.fillStyle=`hsl(${80+Math.random()*25},${30+Math.random()*20}%,${28+Math.random()*16}%)`;g.fillRect(Math.random()*n,Math.random()*n,1.5,1.5);}},120);
+const paveT=canvasTex(256,(g,n)=>{g.fillStyle='#b9b4aa';g.fillRect(0,0,n,n);g.strokeStyle='#9d978c';g.lineWidth=2;for(let i=0;i<=8;i++){g.beginPath();g.moveTo(i*n/8,0);g.lineTo(i*n/8,n);g.stroke();g.beginPath();g.moveTo(0,i*n/8);g.lineTo(n,i*n/8);g.stroke();}},1);
+const ground=new THREE.Mesh(new THREE.CircleGeometry(600,64),new THREE.MeshStandardMaterial({map:grassT,roughness:1}));
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+
+const model=new THREE.Group(); model.rotation.x=-Math.PI/2; scene.add(model);  // IFC is Z-up
+const storeyG=[]; const pickables=[]; const furnObjs=[]; const roofObjs=[];
+let STO=[], BB=new THREE.Box3();
+
+function makeMat(m,type){
+  const c=new THREE.Color().setRGB(m.c[0],m.c[1],m.c[2]).convertSRGBToLinear();
+  const t=m.t||0;
+  if(t>0.05) return new THREE.MeshPhysicalMaterial({color:c,roughness:0.05,metalness:0,transparent:true,opacity:Math.max(0.18,1-t),envMapIntensity:1.2,depthWrite:false,side:THREE.DoubleSide,flatShading:true});
+  return new THREE.MeshStandardMaterial({color:c,roughness:0.82,metalness:0.0,side:THREE.DoubleSide,flatShading:true,envMapIntensity:0.6});
+}
+
+async function build(){
+  const {J,B}=await loadData();
+  STO=[['1-й этаж',-3],['2-этаж',0],['3-этаж',3],['чердак',6.3]];
+  STO.forEach((s,i)=>{const g=new THREE.Group(); g.userData.i=i; storeyG.push(g); model.add(g);});
+  const texCache={};
+  function tex(name){ if(!texCache[name]){ const t=new THREE.TextureLoader().load(J.texs[name]); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding; t.anisotropy=renderer.capabilities.getMaxAnisotropy(); texCache[name]=t; } return texCache[name]; }
+  const LAYER_T={'KONSTRUKTIV_-_STEN__NESUSIE':'IfcWall','KONSTRUKTIV_-_PEREKR_TIA':'IfcSlab','KONSTRUKTIV_-_LESTNIC_':'IfcStair','KONSTRUKTIV_-_KR_SI':'IfcRoof'};
+  const shellMats={};
+  for(const p of J.shell){
+    const key=p.m;
+    if(!shellMats[key]){
+      const c=new THREE.Color().setRGB(p.c[0],p.c[1],p.c[2]).convertSRGBToLinear();
+      let mat;
+      if(p.tr>0.05) mat=new THREE.MeshPhysicalMaterial({color:c,roughness:0.04,metalness:0,transparent:true,opacity:0.32,envMapIntensity:1.4,depthWrite:false,side:THREE.DoubleSide});
+      else {
+        mat=new THREE.MeshStandardMaterial({color:c,roughness:/METALL/.test(key)?0.45:0.85,metalness:/METALL/.test(key)?0.35:0,side:THREE.DoubleSide,envMapIntensity:0.7});
+        if(p.tex){ mat.map=tex(p.tex); mat.color.setRGB(1,1,1); if(/STUKAT|BETON|KIRPIC/.test(key)) mat.color.copy(c).multiplyScalar(1/Math.max(c.r,c.g,c.b)); }
+      }
+      mat.name=key; shellMats[key]=mat;
+    }
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(B,p.po,p.vn*3),3));
+    if(p.uo>=0) geo.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(B,p.uo,p.vn*2),2));
+    geo.setIndex(new THREE.BufferAttribute(p.big?new Uint32Array(B,p.io,p.n):new Uint16Array(B,p.io,p.n),1));
+    // flat normals for crisp architecture
+    const g2=geo.toNonIndexed(); g2.computeVertexNormals();
+    const mesh=new THREE.Mesh(g2,shellMats[key]);
+    const glass=shellMats[key].transparent;
+    mesh.castShadow=!glass; mesh.receiveShadow=!glass;
+    mesh.userData={t:LAYER_T[p.l]||'IfcWall',m:key,s:p.s};
+    storeyG[p.s].add(mesh); pickables.push(mesh);
+    if(p.s===3) roofObjs.push(mesh);
+  }
+  const mats=J.mats.map(m=>makeMat(m));
+  const geoParts=J.geoms.map(g=>{
+    const pos=new Float32Array(B,g.vo,g.vn*3);
+    return g.p.map(([mi,io,n,big])=>{
+      const geo=new THREE.BufferGeometry();
+      geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+      geo.setIndex(new THREE.BufferAttribute(big?new Uint32Array(B,io,n):new Uint16Array(B,io,n),1));
+      return {geo,mi};
+    });
+  });
+  const m4=new THREE.Matrix4();
+  for(const grp of J.inst){
+    const G=storeyG[grp.s];
+    for(const {geo,mi} of geoParts[grp.g]){
+      const mat=mats[mi]; let obj;
+      if(grp.m.length===1){ obj=new THREE.Mesh(geo,mat); obj.matrixAutoUpdate=false; setM(m4,grp.m[0]); obj.matrix.copy(m4); }
+      else { obj=new THREE.InstancedMesh(geo,mat,grp.m.length); grp.m.forEach((a,k)=>{setM(m4,a); obj.setMatrixAt(k,m4);}); obj.instanceMatrix.needsUpdate=true; obj.frustumCulled=false; }
+      obj.castShadow=false; obj.receiveShadow=true;
+      obj.userData={t:grp.t,s:grp.s};
+      G.add(obj); pickables.push(obj);
+      if(grp.t!=='IfcRailing') furnObjs.push(obj);
+    }
+  }
+  model.updateMatrixWorld(true);
+  model.traverse(o=>{ if(o.isMesh&&!o.isInstancedMesh){ o.geometry.computeBoundingBox(); BB.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); }});
+  ground.position.y=BB.min.y+0.02;
+  const counts={}; for(const [si,c] of Object.entries(J.counts)){ counts[si]={}; for(const [t,n] of Object.entries(c)){ const tr=TYPE_RU[t]||t; counts[si][tr]=(counts[si][tr]||0)+n; } }
+  fillTable(counts);
+  setView('iso',true);
+  document.getElementById('load').textContent='Оживляю корпус: студенты идут на пары…';
+}
+function setM(m4,a){ // a = 12 numbers: 3x4 row-major? (stored as M[:3,:].T flattened -> columns)
+  m4.set(a[0],a[3],a[6],a[9], a[1],a[4],a[7],a[10], a[2],a[5],a[8],a[11], 0,0,0,1);
+}
+
+function fillTable(counts){
+  const cols=['Стены','Окна','Двери','Мебель'];
+  let h='<tr><th>Этаж</th>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  const tot={};
+  STO.forEach((s,i)=>{const c=counts[i]||{};
+    const furn=(c['Мебель']||0)+(c['Оборудование']||0)+(c['Радиаторы']||0)+(c['Сантехника']||0);
+    const row={...c,'Мебель':furn}; cols.forEach(k=>tot[k]=(tot[k]||0)+(row[k]||0));
+    h+=`<tr class="fl" data-f="${i<3?i:'all'}"><td>${FLOOR_NAMES[i]}<br><span style="color:var(--muted);font-family:var(--f-mono);font-size:11px">${i<3?fmtLvl(s[1]+3):'конёк +'+(BB.max.y).toFixed(1).replace('.',',')}</span></td>`+cols.map(k=>`<td class="a">${row[k]||'—'}</td>`).join('')+'</tr>';});
+  h+='<tr><td><b>Итого</b></td>'+cols.map(k=>`<td class="a"><b>${tot[k]}</b></td>`).join('')+'</tr>';
+  const tb=document.getElementById('tbl'); tb.innerHTML=h;
+  tb.querySelectorAll('tr.fl').forEach(r=>r.onclick=()=>setFloor(r.dataset.f));
+  const sz=new THREE.Vector3(); BB.getSize(sz);
+  document.getElementById('dims').innerHTML=`Габариты корпуса в плане ≈ ${sz.x.toFixed(1).replace('.',',')} × ${sz.z.toFixed(1).replace('.',',')} м, высота до конька ≈ ${(BB.max.y-0).toFixed(1).replace('.',',')} м. Отметки этажей: ±0,000 · +3,000 · +6,000 (от пола 1 этажа; в проекте ArchiCAD нулём принят пол 2 этажа).`;
+}
+function fmtLvl(v){ if(Math.abs(v)<1e-6) return '±0,000'; return (v>0?'+':'−')+Math.abs(v).toFixed(3).replace('.',','); }
+
+// ---- floors
+let curFloor='all', explode=false;
+function setFloor(f){
+  curFloor=f;
+  if(BB&&!BB.isEmpty()){ const ty=f==='all'?3.5:(+f)*3+1.2; const dy=ty-controls.target.y; if(Math.abs(dy)>0.3) tween={p0:camera.position.clone(),t0:controls.target.clone(),p1:camera.position.clone().setY(camera.position.y+dy),t1:controls.target.clone().setY(ty),k:0}; }
+  document.querySelectorAll('[data-f]').forEach(b=>{ if(b.tagName==='BUTTON') b.classList.toggle('on',b.dataset.f===String(f)); });
+  applyVis();
+}
+function applyVis(){
+  const roofOn=document.getElementById('cRoof').checked, furnOn=document.getElementById('cFurn').checked;
+  storeyG.forEach((g,i)=>{
+    g.visible = curFloor==='all' ? (i<3 || roofOn) : i<=+curFloor;
+    g.position.z = explode ? i*4.5 : 0;   // model group is Z-up
+  });
+  furnObjs.forEach(o=>o.visible=furnOn&&o.userData.s>=2);   // мебель только на 3 этаже (ИНИТ)
+  // when a floor is isolated, hide the slab of the storey above (the floor's ceiling) — it belongs to the next storey, so it's already hidden
+}
+document.querySelectorAll('#floors button,#mFloors button').forEach(b=>b.onclick=()=>setFloor(b.dataset.f));
+document.getElementById('cRoof').onchange=applyVis;
+document.getElementById('cFurn').onchange=applyVis;
+document.getElementById('cExplode').onchange=e=>{explode=e.target.checked; applyVis();};
+document.getElementById('cRotate').onchange=e=>{controls.autoRotate=e.target.checked; controls.autoRotateSpeed=0.8;};
+
+// ---- views
+let tween=null;
+function setView(v,instant){
+  document.querySelectorAll('#views button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  const c=new THREE.Vector3(); BB.getCenter(c); const sz=new THREE.Vector3(); BB.getSize(sz);
+  const R=Math.max(sz.x,sz.z);
+  const tgt=new THREE.Vector3(c.x,3.5,c.z); let pos;
+  if(v==='top') pos=new THREE.Vector3(c.x,R*1.55,c.z+0.01);
+  else if(v==='s') pos=new THREE.Vector3(c.x,6,c.z+R*1.25);
+  else if(v==='n') pos=new THREE.Vector3(c.x,6,c.z-R*1.25);
+  else if(v==='e') pos=new THREE.Vector3(c.x+R*1.25,6,c.z);
+  else if(v==='w') pos=new THREE.Vector3(c.x-R*1.25,6,c.z);
+  else pos=new THREE.Vector3(c.x+R*0.75,R*0.62,c.z+R*0.95);
+  if(instant){camera.position.copy(pos);controls.target.copy(tgt);controls.update();return;}
+  tween={p0:camera.position.clone(),t0:controls.target.clone(),p1:pos,t1:tgt,k:0};
+}
+document.querySelectorAll('#views button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
+
+// ---- time of day
+const TOD=[
+  {top:0x3f7fc4,hor:0xdbe7f1,bot:0x7d8471,sun:0xfff1dc,si:2.0,hemi:0.55,exp:0.95,sp:[-45,60,35]},
+  {top:0x3b4f7a,hor:0xf2b27a,bot:0x5b5048,sun:0xffb070,si:1.4,hemi:0.35,exp:0.9,sp:[-70,18,30]},
+  {top:0x060b18,hor:0x1d2a44,bot:0x141414,sun:0x9fb4ff,si:0.25,hemi:0.12,exp:1.1,sp:[30,60,-20]}];
+const winGlow=[];
+function setTod(i){
+  const t=TOD[i]; const u=sky.material.uniforms;
+  u.top.value.set(t.top);u.hor.value.set(t.hor);u.bot.value.set(t.bot); scene.fog.color.set(t.hor);
+  sun.color.set(t.sun); sun.intensity=t.si; sun.position.set(...t.sp); hemi.intensity=t.hemi; renderer.toneMappingExposure=t.exp;
+  pickables.forEach(o=>{ if(o.material.transparent){ o.material.emissive=o.material.emissive||new THREE.Color(); o.material.emissive.set(i===2?0xffc27a:i===1?0x553311:0x000000); o.material.emissiveIntensity=i===2?0.9:0.4; }});
+  document.querySelectorAll('#tod button').forEach(b=>b.classList.toggle('on',+b.dataset.t===i));
+}
+
+
+// ---- picking
+const ray=new THREE.Raycaster(); const mp=new THREE.Vector2(); let down=null;
+renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5) return;
+  const r=renderer.domElement.getBoundingClientRect();
+  mp.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+  ray.setFromCamera(mp,camera);
+  if(typeof pickNPC==='function'){ const nn=pickNPC(ray); if(nn){ selectNPC(nn); if(MOBILE) document.body.classList.add('exp-open'); return; } }
+  const hit=ray.intersectObjects(pickables.filter(o=>o.visible&&o.parent.visible),false)[0];
+  const p=document.getElementById('pick');
+  if(!hit){p.style.display='none';return;}
+  const u=hit.object.userData;
+  p.style.display='block';
+  p.innerHTML=`<b>${ONE_RU[u.t]||u.t}</b> · ${FLOOR_NAMES[u.s]}<br>Высота точки: ${fmtLvl(hit.point.y)} м`;
+  if(MOBILE) document.body.classList.add('exp-open');
+});
+
+// ---- mobile sheets
+document.getElementById('mMenu').onclick=()=>{document.body.classList.toggle('menu-open');document.body.classList.remove('exp-open');};
+document.getElementById('mInfo').onclick=()=>{document.body.classList.toggle('exp-open');document.body.classList.remove('menu-open');};
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>document.body.classList.remove('menu-open','exp-open'));
+
+// ---- камера: зум к курсору, двойной клик — фокус, WASD
+const _ray=new THREE.Raycaster(), _mv=new THREE.Vector2(), _pl=new THREE.Plane(), _hit=new THREE.Vector3();
+function cursorPoint(e){ const r=renderer.domElement.getBoundingClientRect(); _mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1); _ray.setFromCamera(_mv,camera);
+  _pl.set(new THREE.Vector3(0,1,0),-controls.target.y); return _ray.ray.intersectPlane(_pl,_hit)?_hit.clone():null; }
+host.addEventListener('wheel',e=>{ if(e.target!==renderer.domElement) return; e.preventDefault(); e.stopPropagation(); tween=null;
+  const k=Math.exp(Math.max(-0.6,Math.min(0.6,e.deltaY*(e.ctrlKey?0.01:0.0015))));
+  const dist=camera.position.distanceTo(controls.target); const nk=Math.max(controls.minDistance/dist,Math.min(controls.maxDistance/dist,k));
+  const P=cursorPoint(e)||controls.target.clone();
+  camera.position.sub(P).multiplyScalar(nk).add(P); controls.target.sub(P).multiplyScalar(nk).add(P);
+  if(typeof followN!=='undefined'&&followN&&nk<1){} },{capture:true,passive:false});
+renderer.domElement.addEventListener('dblclick',e=>{ const r=renderer.domElement.getBoundingClientRect(); _mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1); _ray.setFromCamera(_mv,camera);
+  const h=_ray.intersectObjects(pickables.filter(o=>o.visible&&o.parent.visible),false)[0]; const P=h?h.point:cursorPoint(e); if(!P) return;
+  const off=camera.position.clone().sub(controls.target); const L=Math.min(off.length(),Math.max(9,off.length()*0.55)); off.setLength(L);
+  tween={p0:camera.position.clone(),t0:controls.target.clone(),p1:P.clone().add(off),t1:P.clone(),k:0}; });
+const keys={}; addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return; keys[e.code]=true; }); addEventListener('keyup',e=>keys[e.code]=false); addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
+function keyMove(dt){ let f=0,s=0,r=0; if(keys.KeyW||keys.ArrowUp)f++; if(keys.KeyS||keys.ArrowDown)f--; if(keys.KeyD||keys.ArrowRight)s++; if(keys.KeyA||keys.ArrowLeft)s--; if(keys.KeyQ)r--; if(keys.KeyE)r++;
+  if(!f&&!s&&!r) return; tween=null; const fw=controls.target.clone().sub(camera.position); fw.y=0; fw.normalize(); const rt=new THREE.Vector3(-fw.z,0,fw.x);
+  const sp=Math.max(4,camera.position.distanceTo(controls.target)*0.9)*dt; const mv=fw.multiplyScalar(f*sp).add(rt.multiplyScalar(s*sp)); camera.position.add(mv); controls.target.add(mv);
+  if(r){ const off=camera.position.clone().sub(controls.target); off.applyAxisAngle(new THREE.Vector3(0,1,0),-r*dt*1.2); camera.position.copy(controls.target).add(off); } }
+let _lt=performance.now();
+function resize(){const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+addEventListener('resize',resize); resize();
+function loop(){
+  requestAnimationFrame(loop);
+  if(tween){tween.k=Math.min(1,tween.k+0.04);const e=1-Math.pow(1-tween.k,3);
+    camera.position.lerpVectors(tween.p0,tween.p1,e);controls.target.lerpVectors(tween.t0,tween.t1,e);if(tween.k>=1)tween=null;}
+  if(window.simReady) simFrame();
+  const _n=performance.now(); if(!window.fpvOn){ keyMove(Math.min(0.05,(_n-_lt)/1000)); controls.update(); } _lt=_n;
+  renderer.render(scene,camera);
+}
+/*__SIMJS__*/
+/*__WORLDJS__*/
+/*__EVJS__*/
+build().then(()=>new Promise(r=>setTimeout(r,30))).then(async()=>{applyVis(); await initSim(); document.getElementById('load').remove(); window.simReady=true; setFloor('2'); loop();}).catch(e=>{document.getElementById('load').textContent='Ошибка загрузки: '+e.message;console.error(e);});
+</script>
+</body>
+</html>

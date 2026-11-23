@@ -1,0 +1,19 @@
+{% extends "campus/base.html" %}
+{% block title %}Преподаватели{% endblock %}
+{% block content %}
+<h1>Преподаватели и сотрудники</h1>
+<p class="sub">В модели ведут пары первые 14 преподавателей из списка. Расписание пока составляется автоматически.</p>
+<div class="row" style="margin-bottom:12px"><a class="btn primary" href="{% url 'teacher_add' %}">+ Добавить преподавателя</a></div>
+<div class="tablewrap"><table>
+<tr><th>ФИО</th><th>Должность</th><th>Статус</th><th></th></tr>
+{% for t in teachers %}<tr>
+  <td><a href="{% url 'teacher_edit' t.id %}">{{ t }}</a></td><td>{{ t.title }}</td>
+  <td>{% if t.active %}<span class="tag">работает</span>{% else %}<span class="tag off">скрыт</span>{% endif %}</td>
+  <td class="act"><form method="post" action="{% url 'teacher_delete' t.id %}" onsubmit="return confirm('Удалить преподавателя?')">{% csrf_token %}<button class="small danger">Удалить</button></form></td>
+</tr>{% empty %}<tr><td colspan="4" class="muted">Список пуст — в модели будут случайные имена.</td></tr>{% endfor %}
+</table></div>
+<div class="card" style="margin-top:18px;max-width:560px">
+  <h2>Директор и системный администратор</h2>
+  <form method="post" class="stack">{% csrf_token %}{{ form.as_p }}<div class="row end"><button class="primary">Сохранить</button></div></form>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "campus/base.html" %}
+{% block title %}Вход{% endblock %}
+{% block content %}
+<div class="card login">
+  <h1>Вход для сотрудников</h1>
+  <p class="sub">Управлять корпусом могут только сотрудники ИНИТ. Смотреть <a href="{% url 'viewer' %}">3D-модель</a> можно без входа.</p>
+  {% if form.errors %}<ul class="msgs"><li class="error">Неверный логин или пароль.</li></ul>{% endif %}
+  <form method="post">{% csrf_token %}
+    <label for="id_username">Логин</label><input type="text" name="username" id="id_username" autofocus required autocomplete="username">
+    <label for="id_password">Пароль</label><input type="password" name="password" id="id_password" required autocomplete="current-password">
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="row end"><button class="primary">Войти</button></div>
+  </form>
+</div>
+{% endblock %}

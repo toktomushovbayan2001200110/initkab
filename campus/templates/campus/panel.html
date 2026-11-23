@@ -1,0 +1,54 @@
+{% extends "campus/base.html" %}
+{% block title %}Пульт{% endblock %}
+{% block content %}
+<h1>Пульт директора</h1>
+<p class="sub">Всё, что вы здесь меняете, за несколько секунд видят все, у кого открыта 3D-модель.</p>
+<div class="stats">
+  <div class="stat"><b>{{ n_students }}</b><span>студентов</span></div>
+  <div class="stat"><b>{{ n_groups }}</b><span>групп</span></div>
+  <div class="stat"><b>{{ n_teachers }}</b><span>преподавателей</span></div>
+</div>
+<div class="grid">
+  <div class="card wide">
+    <h2>События</h2>
+    {% if current %}<div class="live"><b>{{ current.icon }} Сейчас идёт: {{ current.name }}</b><span class="muted">ещё около {{ current.left }} мин</span>
+      <form method="post" action="{% url 'panel_action' %}">{% csrf_token %}<input type="hidden" name="action" value="stop"><button class="danger small">⏹ Остановить</button></form></div>{% endif %}
+    <form method="post" action="{% url 'panel_action' %}" class="events">{% csrf_token %}<input type="hidden" name="action" value="event">
+      {% for k, name, icon, dur in events %}<button name="type" value="{{ k }}">{{ icon }} {{ name }}<small>{{ dur }} мин</small></button>{% endfor %}
+    </form>
+  </div>
+  <div class="card">
+    <h2>Какой сегодня день</h2>
+    <form method="post" action="{% url 'panel_action' %}">{% csrf_token %}<input type="hidden" name="action" value="settings">
+      <label for="period">День</label>
+      <select name="period" id="period">{% for k, v in periods %}<option value="{{ k }}"{% if k == st.period %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      <label for="weather">Погода</label>
+      <select name="weather" id="weather">{% for k, v in weather %}<option value="{{ k }}"{% if k == st.weather %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      <label for="crowd">Сколько студентов пришло: <b id="crowdV">{{ st.crowd }}</b>%</label>
+      <input type="range" name="crowd" id="crowd" min="10" max="100" step="10" value="{{ st.crowd }}" oninput="document.getElementById('crowdV').textContent=this.value">
+      <div class="row end"><button class="primary">Сохранить</button></div>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Объявление в бегущей строке</h2>
+    <form method="post" action="{% url 'panel_action' %}">{% csrf_token %}<input type="hidden" name="action" value="announce">
+      <label for="text">Текст, до 160 символов</label>
+      <textarea name="text" id="text" rows="3" maxlength="160" placeholder="Например: в пятницу в 15:00 собрание старост в 305">{{ st.announce_text }}</textarea>
+      <div class="row end"><button class="primary">Показать всем</button>{% if st.announce_text %}<button name="text" value="" class="danger" onclick="document.getElementById('text').value=''">Убрать</button>{% endif %}</div>
+    </form>
+    <h2 style="margin-top:22px">События по расписанию</h2>
+    <p class="muted">Запускаются сами каждый учебный день в указанное время по Бишкеку.</p>
+    {% for s in sched %}<div class="row" style="margin:6px 0"><span class="tag">{{ s.time|time:"H:i" }}</span> {{ s.get_type_display }}
+      <form method="post" action="{% url 'panel_action' %}" style="margin-left:auto">{% csrf_token %}<input type="hidden" name="action" value="sched_del"><input type="hidden" name="id" value="{{ s.id }}"><button class="small danger">Убрать</button></form></div>
+    {% empty %}<p class="muted">Пока ничего не запланировано.</p>{% endfor %}
+    <form method="post" action="{% url 'panel_action' %}" class="row" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="action" value="sched_add">
+      <select name="type" style="flex:2;min-width:140px">{% for k, name, icon, dur in events %}<option value="{{ k }}">{{ icon }} {{ name }}</option>{% endfor %}</select>
+      <input type="time" name="time" value="15:00" style="flex:1;min-width:100px"><button>Добавить</button>
+    </form>
+  </div>
+  <div class="card wide">
+    <h2>Кто что менял</h2>
+    <ul class="log">{% for l in logs %}<li><time>{{ l.created|date:"d.m H:i" }}</time><b>{{ l.user.username|default:"—" }}</b> · {{ l.text }}</li>{% empty %}<li class="muted">Пока пусто.</li>{% endfor %}</ul>
+  </div>
+</div>
+{% endblock %}
