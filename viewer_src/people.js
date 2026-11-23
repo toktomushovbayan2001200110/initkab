@@ -39,11 +39,18 @@ function headGeo(scale = 1, keep) {
   for (let i = 0; i < p.count; i++) { const v = headShape(p.getX(i), p.getY(i), p.getZ(i)); p.setXYZ(i, v[0], v[1], v[2]); }
   if (!keep) { s.computeVertexNormals(); return s; }
   const n = s.toNonIndexed(), q = n.attributes.position, out = [];
-  for (let i = 0; i < q.count; i += 3) { const c = [0, 0, 0]; for (let k = 0; k < 3; k++) { c[0] += q.getX(i + k) / 3; c[1] += q.getY(i + k) / 3; c[2] += q.getZ(i + k) / 3; } if (keep(c[0], c[1], c[2])) for (let k = 0; k < 3; k++) out.push(q.getX(i + k) * scale[0], q.getY(i + k) * scale[1] + (scale[3] || 0), q.getZ(i + k) * scale[2] + (scale[4] || 0)); }
+  for (let i = 0; i < q.count; i += 3) {
+    if (keep.lim) {   // ровная линия роста волос: вершины ниже линии подтягиваем к ней
+      const v = [0, 1, 2].map(k => [q.getX(i + k), q.getY(i + k), q.getZ(i + k)]); const lm = v.map(p => keep.lim(p[0], p[2])); const below = v.map((p, k) => p[1] < lm[k]);
+      if (below[0] && below[1] && below[2]) continue;
+      v.forEach((p, k) => { const y = below[k] ? lm[k] : p[1]; out.push(p[0] * scale[0], y * scale[1] + (scale[3] || 0), p[2] * scale[2] + (scale[4] || 0)); });
+      continue;
+    }
+    const c = [0, 0, 0]; for (let k = 0; k < 3; k++) { c[0] += q.getX(i + k) / 3; c[1] += q.getY(i + k) / 3; c[2] += q.getZ(i + k) / 3; } if (keep(c[0], c[1], c[2])) for (let k = 0; k < 3; k++) out.push(q.getX(i + k) * scale[0], q.getY(i + k) * scale[1] + (scale[3] || 0), q.getZ(i + k) * scale[2] + (scale[4] || 0)); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3)); g.computeVertexNormals(); return g;
 }
 // линия роста волос: спереди / сбоку / сзади
-const hairline = (lf, ls, lb, side = 0) => (x, y, z) => { const phi = Math.atan2(Math.abs(x), z); const lim = phi < 1.15 ? lf + (ls - lf) * (phi / 1.15) ** 2 : ls + (lb - ls) * ((phi - 1.15) / (Math.PI - 1.15)); return y > lim + side * x; };
+const hairline = (lf, ls, lb, side = 0) => { const lim = (x, z) => { const phi = Math.atan2(Math.abs(x), z); return (phi < 1.15 ? lf + (ls - lf) * (phi / 1.15) ** 2 : ls + (lb - ls) * ((phi - 1.15) / (Math.PI - 1.15))) + side * x; }; const f = (x, y, z) => y > lim(x, z); f.lim = lim; return f; };
 function backHair(len, a0, a1, rTop, rBot, flare = 0.12) {
   const pos = [], idx = [], SA = 10, SY = 7;
   for (let j = 0; j <= SY; j++) { const t = j / SY, y = 0.05 - len * t; const r = rTop + (rBot - rTop) * t; const zo = -0.012 - Math.max(0, t - 0.25) * flare * len; for (let i = 0; i <= SA; i++) { const a = a0 + (a1 - a0) * i / SA; pos.push(Math.sin(a) * r * 0.92, y, Math.cos(a) * r + zo); } }
@@ -136,7 +143,7 @@ function buildBodies() {
   P('hSide', mergeG([capG(S0, 0.058, 0.0, -0.064, 0.22), el(0.07, 0.03, 0.05, -0.03, 0.09, 0.05, 10)]), N, hairMat);
   const fem = capG([1.085, 1.08, 1.1, 0.005, -0.004], 0.062, -0.05, -0.085);
   P('hLong', mergeG([fem.clone(), backHair(0.36, Math.PI * 0.52, Math.PI * 1.48, 0.122, 0.105, 0.16)]), N, hairMat);
-  P('hPony', mergeG([fem.clone(), (() => { const t = loft([[-0.3, 0.008, 0.008], [-0.24, 0.022, 0.02], [-0.1, 0.03, 0.028], [0.0, 0.026, 0.026], [0.02, 0.012, 0.012]], 8); t.rotateX(0.38); t.translate(0, 0.055, -0.125); return t; })(), el(0.03, 0.03, 0.03, 0, 0.06, -0.118)]), N, hairMat);
+  P('hPony', mergeG([fem.clone(), (() => { const t = loft([[-0.25, 0.006, 0.006], [-0.2, 0.017, 0.015], [-0.08, 0.023, 0.021], [0.0, 0.022, 0.022], [0.02, 0.01, 0.01]], 8); t.rotateX(0.3); t.translate(0, 0.05, -0.122); return t; })(), el(0.03, 0.03, 0.03, 0, 0.06, -0.118)]), N, hairMat);
   P('hBun', mergeG([fem.clone(), el(0.048, 0.045, 0.045, 0, 0.085, -0.105, 10)]), N, hairMat);
   P('hBob', mergeG([fem.clone(), backHair(0.15, Math.PI * 0.42, Math.PI * 1.58, 0.119, 0.11, 0.0)]), N, hairMat);
   P('hBraid', mergeG([fem.clone(), ...[0, 1, 2, 3, 4, 5].map(k => el(0.026 - k * 0.002, 0.036, 0.024, k % 2 ? 0.006 : -0.006, -0.04 - k * 0.055, -0.115 - Math.min(k, 3) * 0.012))]), N, hairMat);
@@ -248,7 +255,7 @@ function poseNPC(n, i, vis) {
     if (sub === 'talk') { const a = Math.sin(st * 3.2 + sd), b = Math.sin(st * 5.1); T.uaR = -0.3 + a * 0.2; T.faR = -1.05 + b * 0.3; T.uaRz = -0.15; if (n.traits && n.traits.social > 0.8) { T.uaL = -0.25 - a * 0.15; T.faL = -0.95 + b * 0.25; } else { T.uaL = 0.0; T.faL = -0.25; } T.headP = Math.sin(st * 2.3) * 0.05; }
     else if (sub === 'phone') { T.uaR = -0.3; T.faR = -1.72; T.headP = 0.5; T.uaL = 0.03; T.faL = -0.2; T.uaRz = 0.12; freeHead = false; }
     else if (sub === 'board') { T.uaR = -2.35 + Math.sin(st * 4) * 0.08; T.faR = -0.35; T.uaRz = -0.25 + Math.sin(st * 2.7) * 0.2; T.uaL = 0.05; T.faL = -0.2; T.headP = -0.15; freeHead = false; }
-    else if (sub === 'explain') { T.uaR = -0.7 + Math.sin(st * 2.5) * 0.35; T.faR = -1.0 + Math.sin(st * 3.3) * 0.3; T.uaL = -0.55 + Math.sin(st * 2.1 + 1) * 0.3; T.faL = -1.1; }
+    else if (sub === 'explain') { const a = Math.sin(st * 2.1 + sd), b = Math.sin(st * 3.3 + sd * 2), c = Math.sin(st * 0.7 + sd); T.uaR = -0.35 + a * 0.3; T.faR = -1.35 + b * 0.4; T.uaRz = -0.22 - Math.max(0, a) * 0.2; if (c > 0.2) { T.uaL = -0.25 - a * 0.2; T.faL = -1.1 + b * 0.3; T.uaLz = 0.25; } else { T.uaL = 0.02; T.faL = -0.3; } T.torsoY = c * 0.12; }
     else if (sub === 'arms') { T.uaL = T.uaR = -0.38; T.faL = T.faR = -1.6; T.uaLz = 0.38; T.uaRz = -0.38; }
     else if (sub === 'sweep') { const s2 = Math.sin(st * 2.6); T.uaL = -0.75 + s2 * 0.25; T.uaR = -0.55 + s2 * 0.25; T.faL = -0.5; T.faR = -0.6; T.torsoP = 0.28; T.headP = 0.2; T.uaLz = 0.25; T.uaRz = -0.05; freeHead = false; }
     else if (sub === 'dance') { const d = Math.sin(st * 5); T.uaL = -2.5 + d * 0.3; T.uaR = -2.5 - d * 0.3; T.faL = T.faR = -0.4; T.uaLz = 0.5; T.uaRz = -0.5; T.headY = d * 0.3; T.hipX = d * 0.04; bob = Math.abs(d) * 0.05; freeHead = false; }

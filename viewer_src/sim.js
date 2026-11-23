@@ -156,6 +156,7 @@ function corridorSpotNear(f, x, y, rad = 6) {
       // запас от стен
       const i = cx(px), j = cy(py); let ok = true;
       for (let a = -2; a <= 2 && ok; a++) for (let b = -2; b <= 2; b++) if (!pass(f, i + a, j + b)) { ok = false; break; }
+      for (let a = -4; a <= 4 && ok; a += 2) for (let b = -4; b <= 4; b += 2) if (cellV(f, i + a, j + b) === -2) { ok = false; break; }   // не встаём в дверях
       if (ok) return { f, x: px, y: py };
     }
   }

@@ -222,6 +222,7 @@ function whyOf(n) {
   if (/отдых/.test(a)) return N.energy < 0.5 ? 'устал, набирается сил' : 'окно между парами';
   if (/чинит|чинить/.test(a)) return 'студент сообщил о поломке';
   if (/ведёт пару/.test(a)) return 'по расписанию';
+  if (/кружк/.test(a)) return 'сам записался — нравится тема';
   if (/кафедр/.test(a)) return 'окно между парами — проверяет работы';
   if (/двор|скамейк/.test(a)) return 'подышать свежим воздухом';
   if (/очеред/.test(a)) return 'за самсой — она тут лучшая';
@@ -237,6 +238,7 @@ cardHTML = n => {
   if (why) h = h.replace(/(<div class="na">[^<]*<\/div>)/, `$1<div class="ns">Почему: ${why}</div>`);
   if (isStu(n) && n.grades) {
     const gs = n.grades.slice(-8).map(g => `<b class="g g${g.g}"${g.old ? '' : ' style="outline:1px solid var(--accent)"'} title="${g.subj}">${g.g}</b>`).join('');
+    if (n.club) h = h.replace('<div class="nt">', `<div class="ns">Кружок: ${n.club.icon} ${n.club.name}</div><div class="nt">`);
     h = h.replace('<div class="nt">', `<div class="ns" style="margin-top:6px">Оценки: ${gs} · средний ${avgGrade(n).toFixed(1)}</div><div class="ns">Посещаемость ${attPct(n)}% · лабораторные ${n.labs.done}/${n.labs.total}${n.debt ? ' · долгов: ' + n.debt : ''}</div><div class="nt">`);
     h = h.replace('<button id="cardFollow">', `<button id="cardJournal" data-g="${n.group.id}">📒 Журнал ${n.group.name}</button><button id="cardFollow">`);
   }
@@ -309,3 +311,46 @@ const _reset0b = resetDay; resetDay = () => { _reset0b(); NPCS.forEach(n => { n.
 const _evInit0b = evInit; evInit = () => { _evInit0b(); initStudy(); brainUI(); };
 // телефон на ходу и «ест» в буфете
 const _startGo0 = startGo; startGo = (n, task) => { n.walkPhone = isStu(n) && !/опаздыва|на пару|буфет/.test(task.act || '') && chance(0.16); _startGo0(n, task); };
+
+// ---------- кружки после пар ----------
+const CLUBS = [
+  { name: 'Олимпиадное программирование', icon: '🏆', pc: true, days: [1, 3, 5] },
+  { name: 'Робототехника', icon: '🤖', pc: true, days: [2, 4] },
+  { name: 'CTF и кибербезопасность', icon: '🛡', pc: true, days: [2, 5] },
+  { name: 'Веб-студия', icon: '🌐', pc: true, days: [1, 4] },
+  { name: 'Английский разговорный клуб', icon: '🗣', pc: false, days: [3, 6] },
+  { name: 'Шахматный клуб', icon: '♟', pc: false, days: [2, 5] },
+];
+function initClubs() { STUDENTS.forEach(s => { const want = s.traits.curious * 0.5 + s.traits.diligent * 0.3 + rr(0, 0.4); s.club = want > 0.62 ? pick(CLUBS) : null; }); }
+function clubRoom(club, t) {
+  const day = simDay; if (club._day === day && club._room) return club._room;
+  const busy = new Set(); for (let p = 0; p < PAIRS.length; p++) if (PAIRS[p][1] > t && PAIRS[p][0] < t + 75) Object.values(SCHED[p]).forEach(s => busy.add(s.room));
+  CLUBS.forEach(c => { if (c !== club && c._day === day && c._room) busy.add(c._room.id); });
+  const pool = (club.pc ? PC_ROOMS : CLASS_ROOMS).filter(r => !busy.has(r.id) && r.name !== 'Лекционная аудитория');
+  club._day = day; club._room = pool.length ? pool[0] : null; club._news = false; return club._room;
+}
+const _decStu0 = decideStudent;
+decideStudent = function (n, t, p, np) {
+  const P = typeof PERIOD === 'function' ? PERIOD() : 'normal';
+  if (n.club && !n.clubDone && t >= n.leave && t < 1050 && n.f === 2 && n.club.days.includes(simDow) && P === 'normal' && !(typeof EV !== 'undefined' && EV.cur)) {
+    n.clubDone = true;
+    const room = clubRoom(n.club, t);
+    if (room) {
+      const seat = freeSeat(room.id, s => !s.office && (!n.club.pc || s.pc >= 0)) || freeSeat(room.id);
+      if (seat) {
+        const dur = rr(45, 70);
+        if (!n.club._news) { n.club._news = true; if (!PREWARM && typeof news === 'function') news(`${n.club.icon} В ${room.num || 'аудитории'} начинается кружок «${n.club.name}»`); }
+        remember(n, `остал${n.g === 'f' ? 'ась' : 'ся'} на кружок «${n.club.name}»`);
+        return takeSeat(n, seat, `идёт на кружок «${n.club.name}»`, { until: t + dur, kind: 'club', sitAct: `на кружке: ${n.club.name}` });
+      }
+    }
+  }
+  return _decStu0(n, t, p, np);
+};
+const _seat0c = seatedBehaviour;
+seatedBehaviour = function (n, T, dt) {
+  _seat0c(n, T, dt);
+  if (T.kind === 'club' && (n.sub === 'phone' || n.sub === 'lean')) { n.sub = n.seat && n.seat.pc >= 0 ? 'type' : (chance(0.5) ? 'write' : 'talk'); if (n.sub === 'talk') { n.talkSide = chance(0.5) ? 0.7 : -0.7; if (chance(0.4)) say(n, pick(['А если через динамику?', 'Смотри, работает!', 'Шах!', 'Давай ещё раз', 'How do you say «лаба»?', 'Флаг нашёл!']), 2.4); } }
+};
+const _reset0c = resetDay; resetDay = () => { _reset0c(); NPCS.forEach(n => { n.clubDone = false; }); };
+const _evInit0c = evInit; evInit = () => { _evInit0c(); initClubs(); };
