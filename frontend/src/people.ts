@@ -92,7 +92,7 @@ function styleNPC(n) {
   if (stu && chance(0.55)) n.cShoes = new THREE.Color(pick([0xf2f2f0, 0x1a1a1a, 0x2c3e50, 0x8a8f96, 0xb23b3b, 0xd8d2c4]));
   n.bagKind = n.bag ? (m || chance(0.55) ? 'pack' : 'tote') : (formal && chance(0.5) ? 'folder' : null);
   n.cCoat = pick(COAT); n.coatHas = n.role !== 'ded' && n.role !== 'snow' && n.role !== 'worker';
-  n.beanie = n.hair !== 'hijab' && chance(m ? 0.45 : 0.35) ? pick(BEANIE) : null;
+  n.beanie = null;   // без головных уборов (пожелание директора)
   n.scarf = chance(0.4) ? pick(BEANIE) : null;
   n.stub = m && n.hair !== 'buzz' && ((formal && chance(0.3)) || (n.role === 'it' && chance(0.6)) || (stu && n.role !== 'kid' && chance(0.08)));
   n.lip = !m && chance(0.5);

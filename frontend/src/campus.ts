@@ -269,7 +269,7 @@ function campusDorm() {
   const can = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.15, 4.6), new THREE.MeshStandardMaterial({ color: 0x4a3326 })); can.position.set(x1 + 1.2, OUTZ + 3.4, -ey); g.add(can);
   const dr = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 2.4), new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.5 })); dr.position.set(x1 + 0.02, OUTZ + 1.8, -ey); dr.rotation.y = Math.PI / 2; g.add(dr);
   const sc2 = document.createElement('canvas'); sc2.width = 1024; sc2.height = 160; const sq = sc2.getContext('2d'); sq.fillStyle = '#1d3f73'; sq.fillRect(0, 0, 1024, 160); sq.fillStyle = '#fff'; sq.textAlign = 'center'; sq.font = 'bold 56px sans-serif'; sq.fillText('ОБЩЕЖИТИЕ  КГУ им. И. АРАБАЕВА', 512, 75); sq.font = '38px sans-serif'; sq.fillStyle = '#e9c46a'; sq.fillText('Жатакана · ул. Раззакова', 512, 130);
-  const st = new THREE.CanvasTexture(sc2); st.encoding = THREE.sRGBEncoding; const sign = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.1), new THREE.MeshStandardMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0.15 })); sign.position.set(x1 + 0.03, OUTZ + 4.3, -ey); sign.rotation.y = Math.PI / 2; g.add(sign);
+  const st = new THREE.CanvasTexture(sc2); st.encoding = THREE.sRGBEncoding; const sign = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.1), new THREE.MeshStandardMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0.15 })); sign.position.set(x1 + 0.03, OUTZ + 4.3, -ey); sign.rotation.y = Math.PI / 2; /* вывеска убрана */;
   // площадка со скамейками перед входом
   const benchM = new THREE.MeshStandardMaterial({ color: 0x8a5a34, roughness: 0.8 });
   [-6, -3.5, 3.5, 6].forEach(dy => { const bn = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 1.7), benchM); bn.position.set(x1 + 2.6, OUTZ + 0.46, -(ey + dy)); g.add(bn); });
@@ -287,12 +287,12 @@ function campusDorm() {
   });
 }
 
-// ---------- 9. интерфейс: панели сворачиваются, скорость — только в режиме директора ----------
+// ---------- 9. интерфейс: панели сворачиваются; скорость, пульт директора и «Сегодня в ИНИТ» скрыты (управление — в Django /panel/) ----------
 function campusUI() {
   const st = document.createElement('style');
   st.textContent = `body.clean #ctrl, body.clean #exp { display: none !important; }
   #cleanBtn { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; border: 1px solid var(--line, #ddd); background: var(--panel, #fff); border-radius: 18px; padding: 6px 14px; font: 600 12.5px system-ui, sans-serif; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
-  body:not(.director) #sSpeed button:not([data-s="live"]), body:not(.director) #sMorning, body:not(.director) #sJumpPair, body:not(.director) #sJumpBreak { display: none; }`;
+  #sSpeed, #sMorning, #sJumpPair, #sJumpBreak, #adminBox, #todayBox, #tbl, #dims, #exp > h2 { display: none !important; }`;
   document.head.appendChild(st);
   const b = document.createElement('button'); b.id = 'cleanBtn'; b.textContent = '⤢ Во весь экран';
   b.onclick = () => { document.body.classList.toggle('clean'); b.textContent = document.body.classList.contains('clean') ? '☰ Показать панели' : '⤢ Во весь экран'; };
@@ -303,6 +303,7 @@ function campusUI() {
 
 // ---------- кадр: флаги, огонь мачты, светофор, снег ----------
 function campusFrame() {
+  if (typeof LAMPS !== 'undefined' && LAMPS) LAMPS.visible = false;   // светильники под потолком мешают смотреть сверху
   const t = (performance.now() - CAMPUS.t0) / 1000;
   if (CAMPUS.flags.length && floorVis(3)) flagsFrame(t);
   const night = simT < 420 || simT > 1110;
@@ -318,7 +319,7 @@ function campusFrame() {
 }
 
 function buildCampus() {
-  const steps: [string, () => void][] = [['facade', campusFacade], ['ac', campusAC], ['portrait', campusPortrait], ['flags', campusFlagsRow], ['yurt', campusYurt], ['mast', campusMast], ['interior', campusInterior], ['dorm', campusDorm], ['ui', campusUI]];
+  const steps: [string, () => void][] = [['facade', campusFacade], ['ac', campusAC], ['interior', campusInterior], ['dorm', campusDorm], ['ui', campusUI]];
   for (const [n, f] of steps) { try { f(); } catch (e) { console.error('campus ' + n, e); } }
   // точки во дворе, которые теперь заняты, убираем из списка мест для прогулок
   for (let i = YARD.length - 1; i >= 0; i--) { const [x, y] = YARD[i]; const k = cy(y) * SNX + cx(x); if (GRID[3][k] !== -2) YARD.splice(i, 1); }

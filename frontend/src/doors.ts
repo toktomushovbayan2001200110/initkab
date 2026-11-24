@@ -1,4 +1,4 @@
-// ================= ДВЕРИ: открываются, когда кто-то проходит =================
+// ================= ДВЕРИ: открываются, когда кто-то входит или выходит через них =================
 const DOORS: Door[] = [];
 function buildDoors() {
   const f = 2, G = GRID[f], seen = new Uint8Array(G.length);
@@ -64,13 +64,30 @@ function buildDoors() {
   if (window.DEBUG_DOORS) console.log('doors', DOORS.length);
 }
 let doorK = 0;
+// дверь открывается только для того, кто в неё входит: человек стоит в проёме
+// или его путь в ближайшие ~2,4 м проходит через проём
+function goesThrough(n: any, d: Door): boolean {
+  const R2 = 0.55 * 0.55;
+  if ((n.x - d.x) ** 2 + (n.y - d.y) ** 2 < R2) return true;
+  const T = n.tasks && n.tasks[0];
+  const path = n.path ? n.path : T && T.path ? T.path : null, i0 = n.path ? n.pi : T && T.path ? T.pi : 0;
+  if (!path) return false;
+  let px = n.x, py = n.y, left = 2.4;
+  for (let i = i0; i < path.length && left > 0; i++) {
+    const p = path[i]; if (p.f !== undefined && p.f !== d.f) break;
+    const sx = p.x - px, sy = p.y - py, L = Math.hypot(sx, sy) || 1e-6, use = Math.min(L, left);
+    for (let t = 0; t <= use; t += 0.2) { const qx = px + sx / L * t, qy = py + sy / L * t; if ((qx - d.x) ** 2 + (qy - d.y) ** 2 < R2) return true; }
+    px = p.x; py = p.y; left -= L;
+  }
+  return false;
+}
 function doorsFrame(dt: number): void {
   if (!DOORS.length) return;
   // кто рядом с дверью: проверяем часть дверей за кадр
   const per = Math.max(4, Math.ceil(DOORS.length / 3));
   for (let c = 0; c < per; c++) {
     const d = DOORS[doorK = (doorK + 1) % DOORS.length]; let near = false;
-    for (const n of NPCS) { if (!n.spawned || n.hidden || n.f !== d.f) continue; const dx = n.x - d.x, dy = n.y - d.y; if (dx * dx + dy * dy < 1.45 * 1.45) { near = true; break; } }
+    for (const n of NPCS) { if (!n.spawned || n.hidden || n.f !== d.f) continue; const dx = n.x - d.x, dy = n.y - d.y; if (dx * dx + dy * dy < 2.2 * 2.2 && goesThrough(n, d)) { near = true; break; } }
     if (!near && typeof fpvOn !== 'undefined' && fpvOn && typeof FPV !== 'undefined' && FPV && FPV.f === d.f && Math.hypot(FPV.x - d.x, FPV.y - d.y) < 1.6) near = true;
     if (near) d.hold = performance.now() + 1600;
     d.want = performance.now() < (d.hold || 0) ? 1 : 0;

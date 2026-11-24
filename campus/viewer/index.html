@@ -953,18 +953,20 @@ function corridorSpotNear(f, x, y, rad = 6) {
             // запас от стен
             const i = cx(px), j = cy(py);
             let ok = true;
-            for (let a = -2; a <= 2 && ok; a++)
-                for (let b = -2; b <= 2; b++)
+            for (let a = -3; a <= 3 && ok; a++)
+                for (let b = -3; b <= 3; b++)
                     if (!pass(f, i + a, j + b)) {
                         ok = false;
                         break;
                     }
-            for (let a = -4; a <= 4 && ok; a += 2)
-                for (let b = -4; b <= 4; b += 2)
+            for (let a = -6; a <= 6 && ok; a += 2)
+                for (let b = -6; b <= 6; b += 2)
                     if (cellV(f, i + a, j + b) === -2) {
                         ok = false;
                         break;
                     } // не встаём в дверях
+            if (ok && CONVS.some(c => c.f === f && (c.x - px) ** 2 + (c.y - py) ** 2 < 2.6 * 2.6))
+                ok = false; // кружки не слипаются в толпу
             if (ok)
                 return { f, x: px, y: py };
         }
@@ -973,10 +975,38 @@ function corridorSpotNear(f, x, y, rad = 6) {
     return c != null ? randomCellIn(f, c) : null;
 }
 // доска / точка преподавателя
+// ближайшая свободная клетка именно внутри комнаты (не за стеной в коридоре), с отступом от стен
+function nearestInRoom(f, x, y, roomId, maxR = 25) {
+    const i0 = cx(x), j0 = cy(y);
+    const good = (i, j) => { for (let b = -2; b <= 2; b++)
+        for (let a = -2; a <= 2; a++) {
+            const v = cellV(f, i + a, j + b);
+            if (v === -1)
+                return false;
+        } return cellV(f, i, j) === roomId; };
+    for (let r = 0; r <= maxR; r++) {
+        let best = null, bd = 1e9;
+        for (let i = i0 - r; i <= i0 + r; i++)
+            for (let j = j0 - r; j <= j0 + r; j++) {
+                if (Math.max(Math.abs(i - i0), Math.abs(j - j0)) !== r)
+                    continue;
+                if (good(i, j)) {
+                    const d = (i - i0) ** 2 + (j - j0) ** 2;
+                    if (d < bd) {
+                        bd = d;
+                        best = [i, j];
+                    }
+                }
+            }
+        if (best)
+            return best;
+    }
+    return null;
+}
 function teacherSpot(room) {
     const b = BOARDS.find(b => b.room === room.id);
     if (b) {
-        const p = nearestPass(room.f, b.t[0], b.t[1], 8);
+        const p = nearestInRoom(room.f, b.t[0], b.t[1], room.id) || nearestPass(room.f, b.t[0], b.t[1], 8);
         return { f: room.f, x: p ? wx(p[0]) : b.t[0], y: p ? wy(p[1]) : b.t[1], a: Math.atan2(b.p[1] - b.t[1], b.p[0] - b.t[0]), board: b.p };
     }
     const ss = seatsIn(room.id).filter(s => !s.office);
@@ -992,7 +1022,7 @@ function teacherSpot(room) {
             px = s.p[0];
             py = s.p[1];
         } });
-        const p = nearestPass(room.f, px + ax * 1.6, py + ay * 1.6, 10);
+        const p = nearestInRoom(room.f, px + ax * 1.6, py + ay * 1.6, room.id) || nearestPass(room.f, px + ax * 1.6, py + ay * 1.6, 10);
         return { f: room.f, x: p ? wx(p[0]) : px, y: p ? wy(p[1]) : py, a: Math.atan2(-ay, -ax), board: [px + ax * 2.5, py + ay * 2.5] };
     }
     return { f: room.f, x: room.c[0], y: room.c[1], a: 0 };
@@ -1316,6 +1346,26 @@ function processPaths(budget = 6) {
         n.pi = 0;
     }
 }
+// идут друг за другом: если прямо впереди кто-то есть, притормаживаем, а не лезем сквозь него
+function followGap(n) {
+    if (n.f > 2)
+        return 1;
+    const ca = Math.cos(n.a), sa = Math.sin(n.a);
+    let k = 1;
+    for (const m of NPCS) {
+        if (m === n || !m.spawned || m.hidden || m.f !== n.f || Math.abs(m.z - n.z) > 0.5)
+            continue;
+        const dx = m.x - n.x, dy = m.y - n.y;
+        if (dx > 1 || dx < -1 || dy > 1 || dy < -1)
+            continue;
+        const ahead = dx * ca + dy * sa, side = Math.abs(-dx * sa + dy * ca);
+        if (ahead > 0.05 && ahead < 0.85 && side < 0.38) {
+            const same = Math.cos(m.a - n.a) > 0.3 && m.walk > 0.2;
+            k = Math.min(k, same ? 0.35 + ahead * 0.6 : 0.75);
+        }
+    }
+    return k;
+}
 function stepGo(n, dt, task) {
     if (n.waitPath)
         return;
@@ -1324,7 +1374,7 @@ function stepGo(n, dt, task) {
         return;
     }
     n.pose = 'stand';
-    const pace = task.pace || 1;
+    const pace = (task.pace || 1) * followGap(n);
     let rem = n.speed * pace * dt;
     while (rem > 0 && n.pi < n.path.length) {
         const p = n.path[n.pi];
@@ -1434,6 +1484,90 @@ function buildOutdoor() {
     }
     GRID[3] = out;
     GRID.FP = fp;
+    try {
+        blockOutdoorProps();
+    }
+    catch (e) {
+        console.warn('outdoor props', e);
+    }
+}
+// перила и ступени крылец снаружи здания: на перила нельзя вставать, у ступеней не стоим толпой
+const OUT_STAIRS = [];
+function blockOutdoorProps() {
+    const G = GRID[3], FP = GRID.FP, mi = new THREE.Matrix4(), mm = new THREE.Matrix4();
+    const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
+    const block = (x, y) => { const i = cx(x), j = cy(y); if (i < 1 || j < 1 || i >= SNX - 1 || j >= SNY - 1)
+        return; const c = j * SNX + i; if (FP[c])
+        return; for (let b = -1; b <= 1; b++)
+        for (let a = -1; a <= 1; a++) {
+            const cc = c + b * SNX + a;
+            if (G[cc] === -2)
+                G[cc] = -1;
+        } };
+    const stairSeen = new Set();
+    for (let f = 0; f < 3; f++) {
+        if (!storeyG[f])
+            continue;
+        for (const o of storeyG[f].children) {
+            const t = o.userData && o.userData.t;
+            // крыльца: парапеты (стены), перила и ступени у входов — на них не встают
+            if (f !== 0 && t !== 'IfcRailing')
+                continue;
+            if (t !== 'IfcRailing' && t !== 'IfcStair' && t !== 'IfcWall')
+                continue;
+            const pos = o.geometry && o.geometry.attributes.position;
+            if (!pos)
+                continue;
+            const idx = o.geometry.index;
+            const triN = idx ? idx.count / 3 : pos.count / 3;
+            const cnt = o.isInstancedMesh ? o.count : 1;
+            for (let q = 0; q < cnt; q++) {
+                if (o.isInstancedMesh) {
+                    o.getMatrixAt(q, mi);
+                    mm.multiplyMatrices(o.matrix, mi);
+                }
+                else
+                    mm.copy(o.matrix);
+                for (let k = 0; k < triN; k++) {
+                    const ia = idx ? idx.getX(k * 3) : k * 3, ib = idx ? idx.getX(k * 3 + 1) : k * 3 + 1, ic = idx ? idx.getX(k * 3 + 2) : k * 3 + 2;
+                    A.fromBufferAttribute(pos, ia).applyMatrix4(mm);
+                    B.fromBufferAttribute(pos, ib).applyMatrix4(mm);
+                    C.fromBufferAttribute(pos, ic).applyMatrix4(mm);
+                    if (Math.min(A.z, B.z, C.z) > FZ[0] + 2.2)
+                        continue;
+                    const mx = (A.x + B.x + C.x) / 3, my = (A.y + B.y + C.y) / 3;
+                    const ci = cx(mx), cj = cy(my);
+                    if (ci >= 0 && cj >= 0 && ci < SNX && cj < SNY && FP[cj * SNX + ci] && FP[cy(A.y) * SNX + cx(A.x)])
+                        continue; // внутри здания
+                    if (t === 'IfcStair') {
+                        const key = cx(mx) + ',' + cy(my);
+                        if (!stairSeen.has(key)) {
+                            stairSeen.add(key);
+                            OUT_STAIRS.push([mx, my]);
+                        }
+                        continue;
+                    }
+                    for (const [P, Q] of [[A, B], [B, C], [C, A]]) {
+                        const L = Math.hypot(Q.x - P.x, Q.y - P.y);
+                        for (let d = 0; d <= L; d += 0.1)
+                            block(P.x + (Q.x - P.x) * d / L, P.y + (Q.y - P.y) * d / L);
+                        if (L === 0)
+                            block(P.x, P.y);
+                    }
+                }
+            }
+        }
+    }
+    // выходы из дверей должны остаться проходимыми
+    for (const e of ENTR) {
+        const i0 = cx(e.out[0]), j0 = cy(e.out[1]);
+        for (let b = -3; b <= 3; b++)
+            for (let a = -3; a <= 3; a++) {
+                const c = (j0 + b) * SNX + i0 + a;
+                if (c >= 0 && c < G.length && !FP[c] && G[c] === -1)
+                    G[c] = -2;
+            }
+    }
 }
 function blockDisk(x, y, r) { const G = GRID[3]; const i0 = cx(x), j0 = cy(y), R = Math.ceil(r / SR); for (let j = j0 - R; j <= j0 + R; j++)
     for (let i = i0 - R; i <= i0 + R; i++)
@@ -1462,6 +1596,8 @@ function finishOutdoor() {
                         ok = false;
                         break;
                     }
+            if (ok && OUT_STAIRS.some(p => (p[0] - wx(i)) ** 2 + (p[1] - wy(j)) ** 2 < 2.5 * 2.5))
+                ok = false; // не у крыльца
             if (ok)
                 YARD.push([wx(i), wy(j)]);
         }
@@ -1643,13 +1779,33 @@ function joinConv(n, c, act) {
         return false;
     c.members.push(n);
     n.conv = c;
-    const ang = rnd() * Math.PI * 2;
-    const R = 0.5 + c.members.length * 0.04;
-    let px = c.x + Math.cos(ang) * R, py = c.y + Math.sin(ang) * R;
-    if (!pass(c.f, cx(px), cy(py))) {
-        px = c.x + Math.cos(ang) * 0.35;
-        py = c.y + Math.sin(ang) * 0.35;
+    // места по кругу, равномерно, чтобы люди не стояли друг в друге
+    if (c.ang0 == null)
+        c.ang0 = rnd() * Math.PI * 2;
+    c.slots = c.slots || [];
+    const R = 0.62 + Math.min(6, c.members.length) * 0.07;
+    let px = c.x, py = c.y, placed = false;
+    for (let tr = 0; tr < 12 && !placed; tr++) {
+        const ang = c.ang0 + (c.slots.length + tr) * 2.39996;
+        const qx = c.x + Math.cos(ang) * R, qy = c.y + Math.sin(ang) * R;
+        if (!pass(c.f, cx(qx), cy(qy)))
+            continue;
+        if (c.slots.some(s => (s[0] - qx) ** 2 + (s[1] - qy) ** 2 < 0.5 * 0.5))
+            continue;
+        px = qx;
+        py = qy;
+        placed = true;
     }
+    if (!placed) {
+        const ang = rnd() * Math.PI * 2;
+        px = c.x + Math.cos(ang) * 0.6;
+        py = c.y + Math.sin(ang) * 0.6;
+        if (!pass(c.f, cx(px), cy(py))) {
+            px = c.x;
+            py = c.y;
+        }
+    }
+    c.slots.push([px, py]);
     goTo(n, { f: c.f, x: px, y: py }, c.f === 3 ? 'идёт к друзьям во двор' : 'идёт к друзьям', m => { m.tasks.unshift({ t: 'chat', conv: c, act: act || (c.f === 3 ? (simT > 1060 ? 'жай-жай гуляет с друзьями' : 'болтает во дворе') : 'общается') }); }, c.f === 3 ? 0.8 : 1);
     return true;
 }
@@ -2051,7 +2207,8 @@ function runTask__base(n, dt) {
             n.walk = Math.max(0, n.walk - dt * 5);
             n.act = T.act;
             const c = T.conv;
-            n.a = lerpAng(n.a, Math.atan2(c.y - n.y, c.x - n.x), Math.min(1, dt * 30));
+            if (Math.hypot(c.y - n.y, c.x - n.x) > 0.3)
+                n.a = lerpAng(n.a, Math.atan2(c.y - n.y, c.x - n.x), Math.min(1, dt * 6)); // в самом центре кружка не крутимся
             n.sub = n.say && performance.now() < n.sayT ? 'talk' : (chance(0.004) ? 'phone' : (n.sub === 'phone' ? 'phone' : 'idle'));
             const sh = n.group ? n.group.shift : null, p = pairAt(simT, sh), np = nextPair(simT, sh);
             const mustGo = n.role === 'student' && ((p >= 0 && lessonFor(n, p) && !n.skip) || (np >= 0 && lessonFor(n, np) && PAIRS[np][0] - simT < 1 + n.traits.punctual * 4));
@@ -2171,7 +2328,7 @@ function teachBehaviour__base(n, T, dt) {
             const ss = seatsIn(T.room.id).filter(s => s.occ && s.occ.role === 'student');
             const s = ss.length ? pick(ss) : null;
             if (s) {
-                const q = nearestPass(T.room.f, s.p[0] - Math.cos(s.a) * 0.7, s.p[1] - Math.sin(s.a) * 0.7, 6);
+                const q = nearestInRoom(T.room.f, s.p[0] - Math.cos(s.a) * 0.7, s.p[1] - Math.sin(s.a) * 0.7, T.room.id, 6);
                 if (q)
                     T.wp = { x: wx(q[0]), y: wy(q[1]), s };
             }
@@ -2821,7 +2978,7 @@ function styleNPC(n) {
     n.bagKind = n.bag ? (m || chance(0.55) ? 'pack' : 'tote') : (formal && chance(0.5) ? 'folder' : null);
     n.cCoat = pick(COAT);
     n.coatHas = n.role !== 'ded' && n.role !== 'snow' && n.role !== 'worker';
-    n.beanie = n.hair !== 'hijab' && chance(m ? 0.45 : 0.35) ? pick(BEANIE) : null;
+    n.beanie = null; // без головных уборов (пожелание директора)
     n.scarf = chance(0.4) ? pick(BEANIE) : null;
     n.stub = m && n.hair !== 'buzz' && ((formal && chance(0.3)) || (n.role === 'it' && chance(0.6)) || (stu && n.role !== 'kid' && chance(0.08)));
     n.lip = !m && chance(0.5);
@@ -3696,7 +3853,6 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
     }
     ground.material.color.set(S.grass).multiplyScalar(1.25);
     W.grassMats.push(ground.material);
-    blockDisk(plaza.x, plaza.y, 2.8);
     // ---- деревья
     const trees = [];
     const ok = (x, y, minB, minT) => { const i = cx(x), j = cy(y); if (i < 2 || j < 2 || i >= SNX - 2 || j >= SNY - 2)
@@ -3741,6 +3897,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
             continue;
         far.push({ x, y, k: chance(0.3) ? 'poplar' : 'elm', far: true });
     }
+    trees.length = 0; // двор — только газон и брусчатка (пожелание директора): деревья только в городе
     const all = trees.concat(far);
     const trunkG = new THREE.CylinderGeometry(0.11, 0.17, 1, 6);
     trunkG.translate(0, 0.5, 0);
@@ -3796,6 +3953,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
             continue;
         benchPos.push({ x, y, a: Math.atan2(-ny * side, -nx * side) });
     }
+    benchPos.length = 0; // во дворе без скамеек
     const seatG = new THREE.BoxGeometry(1.8, 0.06, 0.42);
     seatG.translate(0, 0.44, 0);
     const backG = new THREE.BoxGeometry(1.8, 0.4, 0.05);
@@ -3826,7 +3984,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
         const u = d / L, nx = -(s[3] - s[1]) / L, ny = (s[2] - s[0]) / L;
         lampPos.push([s[0] + (s[2] - s[0]) * u + nx * (s[4] / 2 + 0.35), s[1] + (s[3] - s[1]) * u + ny * (s[4] / 2 + 0.35)]);
     } });
-    const lp = lampPos.filter(([x, y]) => { const k = cy(y) * SNX + cx(x); return k >= 0 && k < n && G3[k] === -2 && distB[k] > 6; });
+    const lp = [].filter(([x, y]) => { const k = cy(y) * SNX + cx(x); return k >= 0 && k < n && G3[k] === -2 && distB[k] > 6; });
     // изогнутые чёрные фонари, как во дворе корпуса
     const poleG = BGU.mergeBufferGeometries([(() => { const c = new THREE.CylinderGeometry(0.05, 0.09, 4.4, 8); c.translate(0, 2.2, 0); return c; })(), (() => { const t = new THREE.TorusGeometry(0.8, 0.045, 6, 14, 2.094); t.rotateZ(Math.PI / 3); t.translate(0.8, 4.4, 0); return t; })()]);
     const headG = BGU.mergeBufferGeometries([(() => { const h = new THREE.CylinderGeometry(0.1, 0.24, 0.16, 12); h.translate(1.2, 4.98, 0); return h; })(), (() => { const h = new THREE.CylinderGeometry(0.2, 0.2, 0.03, 12); h.translate(1.2, 4.89, 0); return h; })()]);
@@ -5107,16 +5265,12 @@ function evDayPlan() {
     });
     const S = STUDENTS, Tc = TEACHERS;
     if (P === 'nooruz') {
-        S.forEach(s => { s.offToday = chance(0.3); s.arrive = rr(600, 700); s.leave = rr(900, 1010); if (s.g === 'm' && chance(0.5))
-            s.hat = 'kalpak'; if (s.g === 'f' && chance(0.45))
+        S.forEach(s => { s.offToday = chance(0.3); s.arrive = rr(600, 700); s.leave = rr(900, 1010); if (s.g === 'f' && chance(0.45))
             s.cTop = new THREE.Color(pick([0xb3202a, 0xd8d0c0, 0x8c1a3a, 0xe0c9a0])); });
-        Tc.forEach(t => { t.offToday = chance(0.45); t.arrive = rr(610, 700); t.leave = rr(840, 960); if (t.g === 'm' && chance(0.7))
-            t.hat = 'kalpak'; });
+        Tc.forEach(t => { t.offToday = chance(0.45); t.arrive = rr(610, 700); t.leave = rr(840, 960); });
         if (DEAN) {
             DEAN.arrive = 600;
             DEAN.leave = 960;
-            if (DEAN.g === 'm')
-                DEAN.hat = 'kalpak';
         }
     }
     else if (P === 'grad') {
@@ -8389,7 +8543,7 @@ const _evInit0c = evInit;
 evInit = () => { _evInit0c(); initClubs(); };
 
 // ---- doors.ts ----
-// ================= ДВЕРИ: открываются, когда кто-то проходит =================
+// ================= ДВЕРИ: открываются, когда кто-то входит или выходит через них =================
 const DOORS = [];
 function buildDoors() {
     const f = 2, G = GRID[f], seen = new Uint8Array(G.length);
@@ -8527,6 +8681,33 @@ function buildDoors() {
         console.log('doors', DOORS.length);
 }
 let doorK = 0;
+// дверь открывается только для того, кто в неё входит: человек стоит в проёме
+// или его путь в ближайшие ~2,4 м проходит через проём
+function goesThrough(n, d) {
+    const R2 = 0.55 * 0.55;
+    if ((n.x - d.x) ** 2 + (n.y - d.y) ** 2 < R2)
+        return true;
+    const T = n.tasks && n.tasks[0];
+    const path = n.path ? n.path : T && T.path ? T.path : null, i0 = n.path ? n.pi : T && T.path ? T.pi : 0;
+    if (!path)
+        return false;
+    let px = n.x, py = n.y, left = 2.4;
+    for (let i = i0; i < path.length && left > 0; i++) {
+        const p = path[i];
+        if (p.f !== undefined && p.f !== d.f)
+            break;
+        const sx = p.x - px, sy = p.y - py, L = Math.hypot(sx, sy) || 1e-6, use = Math.min(L, left);
+        for (let t = 0; t <= use; t += 0.2) {
+            const qx = px + sx / L * t, qy = py + sy / L * t;
+            if ((qx - d.x) ** 2 + (qy - d.y) ** 2 < R2)
+                return true;
+        }
+        px = p.x;
+        py = p.y;
+        left -= L;
+    }
+    return false;
+}
 function doorsFrame(dt) {
     if (!DOORS.length)
         return;
@@ -8539,7 +8720,7 @@ function doorsFrame(dt) {
             if (!n.spawned || n.hidden || n.f !== d.f)
                 continue;
             const dx = n.x - d.x, dy = n.y - d.y;
-            if (dx * dx + dy * dy < 1.45 * 1.45) {
+            if (dx * dx + dy * dy < 2.2 * 2.2 && goesThrough(n, d)) {
                 near = true;
                 break;
             }
@@ -9261,8 +9442,8 @@ function campusDorm() {
     st.encoding = THREE.sRGBEncoding;
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.1), new THREE.MeshStandardMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0.15 }));
     sign.position.set(x1 + 0.03, OUTZ + 4.3, -ey);
-    sign.rotation.y = Math.PI / 2;
-    g.add(sign);
+    sign.rotation.y = Math.PI / 2; /* вывеска убрана */
+    ;
     // площадка со скамейками перед входом
     const benchM = new THREE.MeshStandardMaterial({ color: 0x8a5a34, roughness: 0.8 });
     [-6, -3.5, 3.5, 6].forEach(dy => { const bn = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 1.7), benchM); bn.position.set(x1 + 2.6, OUTZ + 0.46, -(ey + dy)); g.add(bn); });
@@ -9290,12 +9471,12 @@ function campusDorm() {
         CAMPUS.tl.push({ r, gr });
     });
 }
-// ---------- 9. интерфейс: панели сворачиваются, скорость — только в режиме директора ----------
+// ---------- 9. интерфейс: панели сворачиваются; скорость, пульт директора и «Сегодня в ИНИТ» скрыты (управление — в Django /panel/) ----------
 function campusUI() {
     const st = document.createElement('style');
     st.textContent = `body.clean #ctrl, body.clean #exp { display: none !important; }
   #cleanBtn { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; border: 1px solid var(--line, #ddd); background: var(--panel, #fff); border-radius: 18px; padding: 6px 14px; font: 600 12.5px system-ui, sans-serif; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
-  body:not(.director) #sSpeed button:not([data-s="live"]), body:not(.director) #sMorning, body:not(.director) #sJumpPair, body:not(.director) #sJumpBreak { display: none; }`;
+  #sSpeed, #sMorning, #sJumpPair, #sJumpBreak, #adminBox, #todayBox, #tbl, #dims, #exp > h2 { display: none !important; }`;
     document.head.appendChild(st);
     const b = document.createElement('button');
     b.id = 'cleanBtn';
@@ -9308,6 +9489,8 @@ function campusUI() {
 }
 // ---------- кадр: флаги, огонь мачты, светофор, снег ----------
 function campusFrame() {
+    if (typeof LAMPS !== 'undefined' && LAMPS)
+        LAMPS.visible = false; // светильники под потолком мешают смотреть сверху
     const t = (performance.now() - CAMPUS.t0) / 1000;
     if (CAMPUS.flags.length && floorVis(3))
         flagsFrame(t);
@@ -9329,7 +9512,7 @@ function campusFrame() {
     }
 }
 function buildCampus() {
-    const steps = [['facade', campusFacade], ['ac', campusAC], ['portrait', campusPortrait], ['flags', campusFlagsRow], ['yurt', campusYurt], ['mast', campusMast], ['interior', campusInterior], ['dorm', campusDorm], ['ui', campusUI]];
+    const steps = [['facade', campusFacade], ['ac', campusAC], ['interior', campusInterior], ['dorm', campusDorm], ['ui', campusUI]];
     for (const [n, f] of steps) {
         try {
             f();
@@ -9495,8 +9678,8 @@ function azMake(n) {
             o.material = o.material.clone();
             o.material.color.setHex(AZ_PANTS[Math.floor(rnd2(2) * AZ_PANTS.length)]);
         }
-        if (/kalpak|калпак/.test(nm) && rnd2(3) < 0.45)
-            o.visible = false;
+        if (/kalpak|калпак|hat|cap/.test(nm))
+            o.visible = false; // без головных уборов
         if (/backpack|рюкзак/.test(nm) && !n.bag)
             o.visible = false;
     });

@@ -155,24 +155,39 @@ function corridorSpotNear(f, x, y, rad = 6) {
     if (v >= 0 && CORR[f].includes(v)) {
       // запас от стен
       const i = cx(px), j = cy(py); let ok = true;
-      for (let a = -2; a <= 2 && ok; a++) for (let b = -2; b <= 2; b++) if (!pass(f, i + a, j + b)) { ok = false; break; }
-      for (let a = -4; a <= 4 && ok; a += 2) for (let b = -4; b <= 4; b += 2) if (cellV(f, i + a, j + b) === -2) { ok = false; break; }   // не встаём в дверях
+      for (let a = -3; a <= 3 && ok; a++) for (let b = -3; b <= 3; b++) if (!pass(f, i + a, j + b)) { ok = false; break; }
+      for (let a = -6; a <= 6 && ok; a += 2) for (let b = -6; b <= 6; b += 2) if (cellV(f, i + a, j + b) === -2) { ok = false; break; }   // не встаём в дверях
+      if (ok && CONVS.some(c => c.f === f && (c.x - px) ** 2 + (c.y - py) ** 2 < 2.6 * 2.6)) ok = false;   // кружки не слипаются в толпу
       if (ok) return { f, x: px, y: py };
     }
   }
   const c = CORR[f][0]; return c != null ? randomCellIn(f, c) : null;
 }
 // доска / точка преподавателя
+// ближайшая свободная клетка именно внутри комнаты (не за стеной в коридоре), с отступом от стен
+function nearestInRoom(f, x, y, roomId, maxR = 25) {
+  const i0 = cx(x), j0 = cy(y);
+  const good = (i, j) => { for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) { const v = cellV(f, i + a, j + b); if (v === -1) return false; } return cellV(f, i, j) === roomId; };
+  for (let r = 0; r <= maxR; r++) {
+    let best = null, bd = 1e9;
+    for (let i = i0 - r; i <= i0 + r; i++) for (let j = j0 - r; j <= j0 + r; j++) {
+      if (Math.max(Math.abs(i - i0), Math.abs(j - j0)) !== r) continue;
+      if (good(i, j)) { const d = (i - i0) ** 2 + (j - j0) ** 2; if (d < bd) { bd = d; best = [i, j]; } }
+    }
+    if (best) return best;
+  }
+  return null;
+}
 function teacherSpot(room) {
   const b = BOARDS.find(b => b.room === room.id);
-  if (b) { const p = nearestPass(room.f, b.t[0], b.t[1], 8); return { f: room.f, x: p ? wx(p[0]) : b.t[0], y: p ? wy(p[1]) : b.t[1], a: Math.atan2(b.p[1] - b.t[1], b.p[0] - b.t[0]), board: b.p }; }
+  if (b) { const p = nearestInRoom(room.f, b.t[0], b.t[1], room.id) || nearestPass(room.f, b.t[0], b.t[1], 8); return { f: room.f, x: p ? wx(p[0]) : b.t[0], y: p ? wy(p[1]) : b.t[1], a: Math.atan2(b.p[1] - b.t[1], b.p[0] - b.t[0]), board: b.p }; }
   const ss = seatsIn(room.id).filter(s => !s.office);
   if (ss.length) { // перед рядами: противоположно среднему направлению взгляда студентов
     let ax = 0, ay = 0; ss.forEach(s => { ax += Math.cos(s.a); ay += Math.sin(s.a); });
     const n = Math.hypot(ax, ay) || 1; ax /= n; ay /= n;
     let far = -1e9, px = room.c[0], py = room.c[1];
     ss.forEach(s => { const d = s.p[0] * ax + s.p[1] * ay; if (d > far) { far = d; px = s.p[0]; py = s.p[1]; } });
-    const p = nearestPass(room.f, px + ax * 1.6, py + ay * 1.6, 10);
+    const p = nearestInRoom(room.f, px + ax * 1.6, py + ay * 1.6, room.id) || nearestPass(room.f, px + ax * 1.6, py + ay * 1.6, 10);
     return { f: room.f, x: p ? wx(p[0]) : px, y: p ? wy(p[1]) : py, a: Math.atan2(-ay, -ax), board: [px + ax * 2.5, py + ay * 2.5] };
   }
   return { f: room.f, x: room.c[0], y: room.c[1], a: 0 };
@@ -405,11 +420,23 @@ function processPaths(budget = 6) {
     n.path = p; n.pi = 0;
   }
 }
+// идут друг за другом: если прямо впереди кто-то есть, притормаживаем, а не лезем сквозь него
+function followGap(n) {
+  if (n.f > 2) return 1;
+  const ca = Math.cos(n.a), sa = Math.sin(n.a); let k = 1;
+  for (const m of NPCS) {
+    if (m === n || !m.spawned || m.hidden || m.f !== n.f || Math.abs(m.z - n.z) > 0.5) continue;
+    const dx = m.x - n.x, dy = m.y - n.y; if (dx > 1 || dx < -1 || dy > 1 || dy < -1) continue;
+    const ahead = dx * ca + dy * sa, side = Math.abs(-dx * sa + dy * ca);
+    if (ahead > 0.05 && ahead < 0.85 && side < 0.38) { const same = Math.cos(m.a - n.a) > 0.3 && m.walk > 0.2; k = Math.min(k, same ? 0.35 + ahead * 0.6 : 0.75); }
+  }
+  return k;
+}
 function stepGo(n, dt, task) {
   if (n.waitPath) return;
   if (!n.path) { startGo(n, task); return; }
   n.pose = 'stand';
-  const pace = task.pace || 1; let rem = n.speed * pace * dt;
+  const pace = (task.pace || 1) * followGap(n); let rem = n.speed * pace * dt;
   while (rem > 0 && n.pi < n.path.length) {
     const p = n.path[n.pi];
     const dx = p.x - n.x, dy = p.y - n.y, dz = p.z - n.z; const d = Math.hypot(dx, dy, dz * 0.6);
@@ -448,6 +475,41 @@ function buildOutdoor() {
   for (let i = 0; i < SNX; i++) { q.push(i, SNX * (SNY - 1) + i); } for (let j = 0; j < SNY; j++) { q.push(j * SNX, j * SNX + SNX - 1); }
   while (q.length) { const k = q.pop(); if (out[k] === -2 || fp[k]) continue; out[k] = -2; const i = k % SNX, j = (k / SNX) | 0; if (i > 0) q.push(k - 1); if (i < SNX - 1) q.push(k + 1); if (j > 0) q.push(k - SNX); if (j < SNY - 1) q.push(k + SNX); }
   GRID[3] = out; GRID.FP = fp;
+  try { blockOutdoorProps(); } catch (e) { console.warn('outdoor props', e); }
+}
+// перила и ступени крылец снаружи здания: на перила нельзя вставать, у ступеней не стоим толпой
+const OUT_STAIRS: number[][] = [];
+function blockOutdoorProps() {
+  const G = GRID[3], FP = GRID.FP, mi = new THREE.Matrix4(), mm = new THREE.Matrix4();
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
+  const block = (x, y) => { const i = cx(x), j = cy(y); if (i < 1 || j < 1 || i >= SNX - 1 || j >= SNY - 1) return; const c = j * SNX + i; if (FP[c]) return; for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) { const cc = c + b * SNX + a; if (G[cc] === -2) G[cc] = -1; } };
+  const stairSeen = new Set();
+  for (let f = 0; f < 3; f++) {
+    if (!storeyG[f]) continue;
+    for (const o of storeyG[f].children as any[]) {
+      const t = o.userData && o.userData.t;
+      // крыльца: парапеты (стены), перила и ступени у входов — на них не встают
+      if (f !== 0 && t !== 'IfcRailing') continue;
+      if (t !== 'IfcRailing' && t !== 'IfcStair' && t !== 'IfcWall') continue;
+      const pos = o.geometry && o.geometry.attributes.position; if (!pos) continue;
+      const idx = o.geometry.index; const triN = idx ? idx.count / 3 : pos.count / 3;
+      const cnt = o.isInstancedMesh ? o.count : 1;
+      for (let q = 0; q < cnt; q++) {
+        if (o.isInstancedMesh) { o.getMatrixAt(q, mi); mm.multiplyMatrices(o.matrix, mi); } else mm.copy(o.matrix);
+        for (let k = 0; k < triN; k++) {
+          const ia = idx ? idx.getX(k * 3) : k * 3, ib = idx ? idx.getX(k * 3 + 1) : k * 3 + 1, ic = idx ? idx.getX(k * 3 + 2) : k * 3 + 2;
+          A.fromBufferAttribute(pos, ia).applyMatrix4(mm); B.fromBufferAttribute(pos, ib).applyMatrix4(mm); C.fromBufferAttribute(pos, ic).applyMatrix4(mm);
+          if (Math.min(A.z, B.z, C.z) > FZ[0] + 2.2) continue;
+          const mx = (A.x + B.x + C.x) / 3, my = (A.y + B.y + C.y) / 3; const ci = cx(mx), cj = cy(my);
+          if (ci >= 0 && cj >= 0 && ci < SNX && cj < SNY && FP[cj * SNX + ci] && FP[cy(A.y) * SNX + cx(A.x)]) continue;   // внутри здания
+          if (t === 'IfcStair') { const key = cx(mx) + ',' + cy(my); if (!stairSeen.has(key)) { stairSeen.add(key); OUT_STAIRS.push([mx, my]); } continue; }
+          for (const [P, Q] of [[A, B], [B, C], [C, A]]) { const L = Math.hypot(Q.x - P.x, Q.y - P.y); for (let d = 0; d <= L; d += 0.1) block(P.x + (Q.x - P.x) * d / L, P.y + (Q.y - P.y) * d / L); if (L === 0) block(P.x, P.y); }
+        }
+      }
+    }
+  }
+  // выходы из дверей должны остаться проходимыми
+  for (const e of ENTR) { const i0 = cx(e.out[0]), j0 = cy(e.out[1]); for (let b = -3; b <= 3; b++) for (let a = -3; a <= 3; a++) { const c = (j0 + b) * SNX + i0 + a; if (c >= 0 && c < G.length && !FP[c] && G[c] === -1) G[c] = -2; } }
 }
 function blockDisk(x, y, r) { const G = GRID[3]; const i0 = cx(x), j0 = cy(y), R = Math.ceil(r / SR); for (let j = j0 - R; j <= j0 + R; j++) for (let i = i0 - R; i <= i0 + R; i++) if (i >= 0 && j >= 0 && i < SNX && j < SNY && (i - i0) ** 2 + (j - j0) ** 2 <= R * R) G[j * SNX + i] = -1; }
 function blockRect(x, y, w, h, a) { const G = GRID[3]; const c = Math.cos(a), s = Math.sin(a), R = Math.hypot(w, h) / 2 + SR; for (let yy = y - R; yy <= y + R; yy += SR * 0.5) for (let xx = x - R; xx <= x + R; xx += SR * 0.5) { const dx = xx - x, dy = yy - y, u = dx * c + dy * s, v = -dx * s + dy * c; if (Math.abs(u) <= w / 2 + 0.1 && Math.abs(v) <= h / 2 + 0.1) { const i = cx(xx), j = cy(yy); if (i >= 0 && j >= 0 && i < SNX && j < SNY) G[j * SNX + i] = -1; } } }
@@ -457,6 +519,7 @@ function finishOutdoor() {
   for (let j = 3; j < SNY - 3; j += 2) for (let i = 3; i < SNX - 3; i += 2) {
     if (G[j * SNX + i] !== -2) continue; let ok = true;
     for (let b = -5; b <= 5 && ok; b++) for (let a = -5; a <= 5; a++) if (G[(j + b) * SNX + i + a] === -1) { ok = false; break; }
+    if (ok && OUT_STAIRS.some(p => (p[0] - wx(i)) ** 2 + (p[1] - wy(j)) ** 2 < 2.5 * 2.5)) ok = false;   // не у крыльца
     if (ok) YARD.push([wx(i), wy(j)]);
   }
 }
@@ -546,9 +609,20 @@ function makeConv(f, x, y, topic, dur) { const c = { f, x, y, topic, members: []
 function joinConv(n, c, act?) {
   if (c.members.length >= 6) return false;
   c.members.push(n); n.conv = c;
-  const ang = rnd() * Math.PI * 2; const R = 0.5 + c.members.length * 0.04;
-  let px = c.x + Math.cos(ang) * R, py = c.y + Math.sin(ang) * R;
-  if (!pass(c.f, cx(px), cy(py))) { px = c.x + Math.cos(ang) * 0.35; py = c.y + Math.sin(ang) * 0.35; }
+  // места по кругу, равномерно, чтобы люди не стояли друг в друге
+  if (c.ang0 == null) c.ang0 = rnd() * Math.PI * 2;
+  c.slots = c.slots || [];
+  const R = 0.62 + Math.min(6, c.members.length) * 0.07;
+  let px = c.x, py = c.y, placed = false;
+  for (let tr = 0; tr < 12 && !placed; tr++) {
+    const ang = c.ang0 + (c.slots.length + tr) * 2.39996;
+    const qx = c.x + Math.cos(ang) * R, qy = c.y + Math.sin(ang) * R;
+    if (!pass(c.f, cx(qx), cy(qy))) continue;
+    if (c.slots.some(s => (s[0] - qx) ** 2 + (s[1] - qy) ** 2 < 0.5 * 0.5)) continue;
+    px = qx; py = qy; placed = true;
+  }
+  if (!placed) { const ang = rnd() * Math.PI * 2; px = c.x + Math.cos(ang) * 0.6; py = c.y + Math.sin(ang) * 0.6; if (!pass(c.f, cx(px), cy(py))) { px = c.x; py = c.y; } }
+  c.slots.push([px, py]);
   goTo(n, { f: c.f, x: px, y: py }, c.f === 3 ? 'идёт к друзьям во двор' : 'идёт к друзьям', m => { m.tasks.unshift({ t: 'chat', conv: c, act: act || (c.f === 3 ? (simT > 1060 ? 'жай-жай гуляет с друзьями' : 'болтает во дворе') : 'общается') }); }, c.f === 3 ? 0.8 : 1);
   return true;
 }
@@ -732,7 +806,7 @@ function runTask__base(n, dt) {
     }
     case 'chat': {
       n.pose = 'stand'; n.walk = Math.max(0, n.walk - dt * 5); n.act = T.act;
-      const c = T.conv; n.a = lerpAng(n.a, Math.atan2(c.y - n.y, c.x - n.x), Math.min(1, dt * 30));
+      const c = T.conv; if (Math.hypot(c.y - n.y, c.x - n.x) > 0.3) n.a = lerpAng(n.a, Math.atan2(c.y - n.y, c.x - n.x), Math.min(1, dt * 6));   // в самом центре кружка не крутимся
       n.sub = n.say && performance.now() < n.sayT ? 'talk' : (chance(0.004) ? 'phone' : (n.sub === 'phone' ? 'phone' : 'idle'));
       const sh = n.group ? n.group.shift : null, p = pairAt(simT, sh), np = nextPair(simT, sh);
       const mustGo = n.role === 'student' && ((p >= 0 && lessonFor(n, p) && !n.skip) || (np >= 0 && lessonFor(n, np) && PAIRS[np][0] - simT < 1 + n.traits.punctual * 4));
@@ -783,7 +857,7 @@ function teachBehaviour__base(n, T, dt) {
   }
   const atSpot = Math.hypot(n.x - sp.x, n.y - sp.y) < 0.25;
   if (T.mode === 'walk') {
-    if (!T.wp) { const ss = seatsIn(T.room.id).filter(s => s.occ && s.occ.role === 'student'); const s = ss.length ? pick(ss) : null; if (s) { const q = nearestPass(T.room.f, s.p[0] - Math.cos(s.a) * 0.7, s.p[1] - Math.sin(s.a) * 0.7, 6); if (q) T.wp = { x: wx(q[0]), y: wy(q[1]), s }; } if (!T.wp) T.wp = { x: sp.x, y: sp.y }; }
+    if (!T.wp) { const ss = seatsIn(T.room.id).filter(s => s.occ && s.occ.role === 'student'); const s = ss.length ? pick(ss) : null; if (s) { const q = nearestInRoom(T.room.f, s.p[0] - Math.cos(s.a) * 0.7, s.p[1] - Math.sin(s.a) * 0.7, T.room.id, 6); if (q) T.wp = { x: wx(q[0]), y: wy(q[1]), s }; } if (!T.wp) T.wp = { x: sp.x, y: sp.y }; }
     if (!T.path) { T.path = floorPath(T.room.f, n.x, n.y, T.wp.x, T.wp.y) || []; T.pi = 0; }
     if (T.pi < T.path.length) { const p = T.path[T.pi]; const dx = p.x - n.x, dy = p.y - n.y, d = Math.hypot(dx, dy); const st = n.speed * 0.6 * dt; if (d <= st) { n.x = p.x; n.y = p.y; T.pi++; } else { n.x += dx / d * st; n.y += dy / d * st; n.a = lerpAng(n.a, Math.atan2(dy, dx), Math.min(1, dt * 10)); } n.walk = Math.min(0.7, n.walk + dt * 4); n.phase += aph(dt) * n.speed * 3.4; }
     else { n.walk = Math.max(0, n.walk - dt * 5); n.sub = 'explain'; if (T.wp.s) { n.a = lerpAng(n.a, Math.atan2(T.wp.s.p[1] - n.y, T.wp.s.p[0] - n.x), Math.min(1, dt * 20)); const st = T.wp.s.occ; if (st && st.gameMode && chance(0.3)) { say(n, 'Закрой игру!'); st.gameMode = false; } } }

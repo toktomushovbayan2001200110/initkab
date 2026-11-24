@@ -104,7 +104,7 @@ function azMake(n: any) {
     // небольшое разнообразие: цвет рубашки и брюк, калпак не у всех, ноутбук только при ходьбе
     if (/shirt|рубаш/.test(nm)) { o.material = o.material.clone(); o.material.color.setHex(AZ_SHIRT[Math.floor(rnd2(1) * AZ_SHIRT.length)]); }
     else if (/pants|jean|trouser|брюк/.test(nm)) { o.material = o.material.clone(); o.material.color.setHex(AZ_PANTS[Math.floor(rnd2(2) * AZ_PANTS.length)]); }
-    if (/kalpak|калпак/.test(nm) && rnd2(3) < 0.45) o.visible = false;
+    if (/kalpak|калпак|hat|cap/.test(nm)) o.visible = false;   // без головных уборов
     if (/backpack|рюкзак/.test(nm) && !n.bag) o.visible = false;
   });
   const drv = AZ.bones.map((I: any) => ({ I, bone: bones[I.b.name] })).filter((x: any) => x.bone);

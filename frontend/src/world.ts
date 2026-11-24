@@ -148,7 +148,6 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
     mt.customProgramCacheKey = () => 'yard-herringbone';
   }
   ground.material.color.set(S.grass).multiplyScalar(1.25); W.grassMats.push(ground.material);
-  blockDisk(plaza.x, plaza.y, 2.8);
 
   // ---- деревья
   const trees = [];
@@ -164,6 +163,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
   for (let y = -290; y < 290; y += rr(7, 9)) { [-34.2, -46.5].forEach(x => { if (!inR(x, y)) far.push({ x, y, k: chance(0.3) ? 'poplar' : 'elm', far: true }); }); [86, 98, 115, 127].forEach(x => { if (!inR(x, y + rr(-1, 1))) far.push({ x, y, k: 'elm', far: true, big: true }); }); }
   for (let x = -290; x < 290; x += rr(7, 9)) [-80.5, -101.5, 128.5, 142].forEach(y => { if (!inR(x, y)) far.push({ x, y, k: chance(0.35) ? 'poplar' : 'elm', far: true }); });
   for (let t = 0; t < 500 && far.length < 700; t++) { const x = rr(-260, 260), y = rr(-260, 260); if (Math.hypot(x, y) < 45 || inR(x, y, 2.5)) continue; far.push({ x, y, k: chance(0.3) ? 'poplar' : 'elm', far: true }); }
+  trees.length = 0;   // двор — только газон и брусчатка (пожелание директора): деревья только в городе
   const all = trees.concat(far);
   const trunkG = new THREE.CylinderGeometry(0.11, 0.17, 1, 6); trunkG.translate(0, 0.5, 0);
   const elmG = BGU.mergeBufferGeometries([new THREE.IcosahedronGeometry(1, 1), (() => { const b = new THREE.IcosahedronGeometry(0.75, 1); b.translate(0.55, -0.25, 0.3); return b; })(), (() => { const b = new THREE.IcosahedronGeometry(0.7, 1); b.translate(-0.5, -0.2, -0.35); return b; })()]);
@@ -198,6 +198,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
     const k = cy(y) * SNX + cx(x); if (G3[k] !== -2 || distB[k] < 10 || benchPos.some(b => Math.hypot(b.x - x, b.y - y) < 4) || trees.some(tr => Math.hypot(tr.x - x, tr.y - y) < 1.6)) continue;
     benchPos.push({ x, y, a: Math.atan2(-ny * side, -nx * side) });
   }
+  benchPos.length = 0;   // во дворе без скамеек
   const seatG = new THREE.BoxGeometry(1.8, 0.06, 0.42); seatG.translate(0, 0.44, 0);
   const backG = new THREE.BoxGeometry(1.8, 0.4, 0.05); backG.rotateX(-0.12); backG.translate(0, 0.72, -0.22);
   const legG = BGU.mergeBufferGeometries([-0.75, 0.75].map(x => { const b = new THREE.BoxGeometry(0.07, 0.44, 0.44); b.translate(x, 0.22, -0.02); return b; }));
@@ -217,7 +218,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
   const lampPos = [];
   for (let a = 0; a < 6; a++) { const ang = a * Math.PI / 3; lampPos.push([plaza.x + Math.cos(ang) * (plaza.r + 0.6), plaza.y + Math.sin(ang) * (plaza.r + 0.6)]); }
   segs.slice(0, 8).forEach(s => { const L = Math.hypot(s[2] - s[0], s[3] - s[1]); for (let d = 6; d < L - 3; d += 11) { const u = d / L, nx = -(s[3] - s[1]) / L, ny = (s[2] - s[0]) / L; lampPos.push([s[0] + (s[2] - s[0]) * u + nx * (s[4] / 2 + 0.35), s[1] + (s[3] - s[1]) * u + ny * (s[4] / 2 + 0.35)]); } });
-  const lp = lampPos.filter(([x, y]) => { const k = cy(y) * SNX + cx(x); return k >= 0 && k < n && G3[k] === -2 && distB[k] > 6; });
+  const lp = [].filter(([x, y]) => { const k = cy(y) * SNX + cx(x); return k >= 0 && k < n && G3[k] === -2 && distB[k] > 6; });
   // изогнутые чёрные фонари, как во дворе корпуса
   const poleG = BGU.mergeBufferGeometries([(() => { const c = new THREE.CylinderGeometry(0.05, 0.09, 4.4, 8); c.translate(0, 2.2, 0); return c; })(), (() => { const t = new THREE.TorusGeometry(0.8, 0.045, 6, 14, 2.094); t.rotateZ(Math.PI / 3); t.translate(0.8, 4.4, 0); return t; })()]);
   const headG = BGU.mergeBufferGeometries([(() => { const h = new THREE.CylinderGeometry(0.1, 0.24, 0.16, 12); h.translate(1.2, 4.98, 0); return h; })(), (() => { const h = new THREE.CylinderGeometry(0.2, 0.2, 0.03, 12); h.translate(1.2, 4.89, 0); return h; })()]);

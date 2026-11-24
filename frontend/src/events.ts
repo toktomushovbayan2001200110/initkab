@@ -171,9 +171,9 @@ function evDayPlan() {
   });
   const S = STUDENTS, Tc = TEACHERS;
   if (P === 'nooruz') {
-    S.forEach(s => { s.offToday = chance(0.3); s.arrive = rr(600, 700); s.leave = rr(900, 1010); if (s.g === 'm' && chance(0.5)) s.hat = 'kalpak'; if (s.g === 'f' && chance(0.45)) s.cTop = new THREE.Color(pick([0xb3202a, 0xd8d0c0, 0x8c1a3a, 0xe0c9a0])); });
-    Tc.forEach(t => { t.offToday = chance(0.45); t.arrive = rr(610, 700); t.leave = rr(840, 960); if (t.g === 'm' && chance(0.7)) t.hat = 'kalpak'; });
-    if (DEAN) { DEAN.arrive = 600; DEAN.leave = 960; if (DEAN.g === 'm') DEAN.hat = 'kalpak'; }
+    S.forEach(s => { s.offToday = chance(0.3); s.arrive = rr(600, 700); s.leave = rr(900, 1010); if (s.g === 'f' && chance(0.45)) s.cTop = new THREE.Color(pick([0xb3202a, 0xd8d0c0, 0x8c1a3a, 0xe0c9a0])); });
+    Tc.forEach(t => { t.offToday = chance(0.45); t.arrive = rr(610, 700); t.leave = rr(840, 960); });
+    if (DEAN) { DEAN.arrive = 600; DEAN.leave = 960; }
   } else if (P === 'grad') {
     const maxC = Math.max(...GROUPS.map(g => g.course));
     S.forEach(s => { if (s.group.course === maxC) { s.grad = true; s.arrive = rr(585, 640); s.leave = rr(880, 960); s.cTop = new THREE.Color(0x1c2a52); s.hat = 'mboard'; } else { s.offToday = chance(0.6); s.arrive = rr(620, 680); s.leave = rr(770, 870); } });
