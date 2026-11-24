@@ -27,6 +27,9 @@ const cx = x => Math.floor((x - SX0) / SR), cy = y => Math.floor((y - SY0) / SR)
 const wx = i => SX0 + (i + 0.5) * SR, wy = j => SY0 + (j + 0.5) * SR;
 function cellV(f, i, j) { if (i < 0 || j < 0 || i >= SNX || j >= SNY) return -1; return GRID[f][j * SNX + i]; }
 const pass = (f, i, j) => cellV(f, i, j) !== -1;
+const passW = (f, x, y) => pass(f, cx(x), cy(y));
+// тело ~0.2 м: проверяем центр и четыре стороны, чтобы не влезать плечом в стену
+function clearW(f, x, y, r = 0.2) { return passW(f, x, y) && passW(f, x + r, y) && passW(f, x - r, y) && passW(f, x, y + r) && passW(f, x, y - r); }
 function roomAt(f, x, y) { const v = cellV(f, cx(x), cy(y)); return v >= 0 ? v : -1; }
 function nearestPass(f, x, y, maxR = 18) {
   const i0 = cx(x), j0 = cy(y);
@@ -135,7 +138,8 @@ const CLASS_ROOMS = R3.filter(r => r.kind === 'class');
 const KAF = R3.filter(r => r.name === 'Кафедра');
 const R_IT = ROOMS.find(r => r.num === '314');
 const R_DEAN = ROOMS.find(r => r.name === 'Деканат ИНИТ');
-const R_COWORK = ROOMS.find(r => r.name === 'Коворкинг и буфет');
+// буфета в корпусе нет: это обычная аудитория, поесть ходят в столовую вне корпуса
+const R_COWORK: any = null;
 const R_LOUNGE = ROOMS.find(r => r.name === 'Зона отдыха');
 const R_WC = R3.find(r => r.kind === 'wc');
 const CORR = [0, 1, 2].map(f => ROOMS.filter(r => r.f === f && r.kind === 'corridor').map(r => r.id));
@@ -422,13 +426,17 @@ function processPaths(budget = 6) {
 }
 // идут друг за другом: если прямо впереди кто-то есть, притормаживаем, а не лезем сквозь него
 function followGap(n) {
-  if (n.f > 2) return 1;
+  n.dodge = 0;
+  if (n.f > 3) return 1;
   const ca = Math.cos(n.a), sa = Math.sin(n.a); let k = 1;
   for (const m of NPCS) {
     if (m === n || !m.spawned || m.hidden || m.f !== n.f || Math.abs(m.z - n.z) > 0.5) continue;
-    const dx = m.x - n.x, dy = m.y - n.y; if (dx > 1 || dx < -1 || dy > 1 || dy < -1) continue;
-    const ahead = dx * ca + dy * sa, side = Math.abs(-dx * sa + dy * ca);
-    if (ahead > 0.05 && ahead < 0.85 && side < 0.38) { const same = Math.cos(m.a - n.a) > 0.3 && m.walk > 0.2; k = Math.min(k, same ? 0.35 + ahead * 0.6 : 0.75); }
+    const dx = m.x - n.x, dy = m.y - n.y; if (dx > 1.6 || dx < -1.6 || dy > 1.6 || dy < -1.6) continue;
+    const ahead = dx * ca + dy * sa, lat = -dx * sa + dy * ca, side = Math.abs(lat);
+    const same = Math.cos(m.a - n.a) > 0.3 && m.walk > 0.2;
+    // встречный или стоящий на пути: заранее уходим вправо, как люди в коридоре
+    if (!same && ahead > 0.1 && ahead < 1.5 && side < 0.55) n.dodge = Math.max(n.dodge, 1 - side / 0.55);
+    if (ahead > 0.05 && ahead < 0.85 && side < 0.38) k = Math.min(k, same ? 0.35 + ahead * 0.6 : 0.6);
   }
   return k;
 }
@@ -436,16 +444,36 @@ function stepGo(n, dt, task) {
   if (n.waitPath) return;
   if (!n.path) { startGo(n, task); return; }
   n.pose = 'stand';
+  // если нас оттолкнули и до точки маршрута уже не видно напрямую — пересчитать путь, а не идти сквозь стену
+  if (n.pushed) {
+    n.pushed = false; const p = n.path[n.pi];
+    if (p && !p.st && p.f === n.f && n.f <= 3 && !los(n.f, [cx(n.x), cy(n.y)], [cx(p.x), cy(p.y)])) { n.repaths = (n.repaths || 0) + 1; if (n.repaths < 40) { n.path = null; startGo(n, task); return; } }
+  }
+  // точки, которые уже почти пройдены (нас сдвинули мимо), не разворачиваемся к ним
+  while (n.pi < n.path.length - 1) {
+    const p = n.path[n.pi], q = n.path[n.pi + 1];
+    if (p.st || q.st || p.f !== n.f || Math.abs(p.z - n.z) > 0.3 || Math.hypot(p.x - n.x, p.y - n.y) > 0.4) break;
+    if (n.f <= 3 && !los(n.f, [cx(n.x), cy(n.y)], [cx(q.x), cy(q.y)])) break;
+    n.pi++;
+  }
   const pace = (task.pace || 1) * followGap(n); let rem = n.speed * pace * dt;
+  const ox = n.x, oy = n.y; let onStair = false;
   while (rem > 0 && n.pi < n.path.length) {
-    const p = n.path[n.pi];
+    const p = n.path[n.pi]; if (p.st) onStair = true;
     const dx = p.x - n.x, dy = p.y - n.y, dz = p.z - n.z; const d = Math.hypot(dx, dy, dz * 0.6);
     const sp = p.st ? 0.55 : 1;
     if (d <= rem * sp) { n.st.dist += d; n.x = p.x; n.y = p.y; n.z = p.z; n.f = p.f; n.pi++; rem -= d / sp; }
-    else { n.st.dist += rem * sp; n.x += dx / d * rem * sp; n.y += dy / d * rem * sp; n.z += dz / d * rem * sp; if (Math.hypot(dx, dy) > 0.05) n.a = lerpAng(n.a, Math.atan2(dy, dx), Math.min(1, dt * 8)); rem = 0; }
+    else { n.st.dist += rem * sp; n.x += dx / d * rem * sp; n.y += dy / d * rem * sp; n.z += dz / d * rem * sp; if (Math.hypot(dx, dy) > 0.15) n.a = lerpAng(n.a, Math.atan2(dy, dx), Math.min(1, dt * 6)); rem = 0; }
   }
+  // расходимся: шаг вправо, только если там свободно
+  if (n.dodge > 0 && !onStair && n.f <= 3 && n.pi < n.path.length) {
+    const s2 = n.speed * dt * 0.55 * n.dodge, rx = Math.sin(n.a) * s2, ry = -Math.cos(n.a) * s2;
+    if (clearW(n.f, n.x + rx, n.y + ry)) { n.x += rx; n.y += ry; n.pushed = true; }
+  }
+  // никогда не заходим в стену
+  if (!onStair && n.f <= 3 && !passW(n.f, n.x, n.y) && passW(n.f, ox, oy)) { n.x = ox; n.y = oy; n.path = null; startGo(n, task); return; }
   n.walk = Math.min(1, n.walk + dt * 4); n.phase += n.speed * pace * aph(dt) * 4.6;
-  if (n.pi >= n.path.length) { n.path = null; n.tasks.shift(); if (task.after) task.after(n); }
+  if (n.pi >= n.path.length) { n.path = null; n.repaths = 0; n.tasks.shift(); if (task.after) task.after(n); }
 }
 function lerpAng(a, b, t) { let d = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + d * t; }
 function wcCount() { let c = 0; for (const m of NPCS) { const T = m.tasks[0]; if (m.spawned && T && T.t === 'wait' && T.hide) c++; else if (m.spawned && T && T.t === 'go' && T.act === 'идёт в туалет') c++; } return c; }
@@ -476,7 +504,51 @@ function buildOutdoor() {
   while (q.length) { const k = q.pop(); if (out[k] === -2 || fp[k]) continue; out[k] = -2; const i = k % SNX, j = (k / SNX) | 0; if (i > 0) q.push(k - 1); if (i < SNX - 1) q.push(k + 1); if (j > 0) q.push(k - SNX); if (j < SNY - 1) q.push(k + SNX); }
   GRID[3] = out; GRID.FP = fp;
   try { blockOutdoorProps(); } catch (e) { console.warn('outdoor props', e); }
+  try { buildWallCaps(); } catch (e) { console.warn('wall caps', e); }
 }
+// крышки стен: без верхнего этажа стены сверху выглядели пустыми (две тонкие плоскости)
+function buildWallCaps() {
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), mm = new THREE.Matrix4(), mi = new THREE.Matrix4();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xcfc8ba, roughness: 0.9, side: THREE.DoubleSide });
+  for (let f = 0; f < 3; f++) {
+    const g = storeyG[f]; if (!g) continue;
+    const H = new Float32Array(SNX * SNY);
+    const mark = (x, y, h) => { const i = cx(x), j = cy(y); if (i < 0 || j < 0 || i >= SNX || j >= SNY) return; const k = j * SNX + i; if (h > H[k]) H[k] = h; };
+    for (const o of g.children as any[]) {
+      if (!o.isMesh || !o.userData || o.userData.t !== 'IfcWall') continue;
+      const m = o.material; if (!m || m.transparent || /#floor|#ceil|#roof/.test(m.name || '')) continue;
+      const pos = o.geometry && o.geometry.attributes.position; if (!pos) continue;
+      const idx = o.geometry.index; const triN = idx ? idx.count / 3 : pos.count / 3;
+      const cnt = o.isInstancedMesh ? o.count : 1;
+      for (let q = 0; q < cnt; q++) {
+        if (o.isInstancedMesh) { o.getMatrixAt(q, mi); mm.multiplyMatrices(o.matrix, mi); } else mm.copy(o.matrix);
+        for (let k = 0; k < triN; k++) {
+          const ia = idx ? idx.getX(k * 3) : k * 3, ib = idx ? idx.getX(k * 3 + 1) : k * 3 + 1, ic = idx ? idx.getX(k * 3 + 2) : k * 3 + 2;
+          A.fromBufferAttribute(pos, ia).applyMatrix4(mm); B.fromBufferAttribute(pos, ib).applyMatrix4(mm); C.fromBufferAttribute(pos, ic).applyMatrix4(mm);
+          const zt = Math.max(A.z, B.z, C.z), zb = Math.min(A.z, B.z, C.z); if (zt - zb < 1.0) continue;
+          const ux = B.x - A.x, uy = B.y - A.y, uz = B.z - A.z, vx = C.x - A.x, vy = C.y - A.y, vz = C.z - A.z;
+          const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const nl = Math.hypot(nx, ny, nz) || 1; if (Math.abs(nz / nl) > 0.2) continue;
+          for (const [P, Q] of [[A, B], [B, C], [C, A]]) { if (Math.max(P.z, Q.z) < zt - 0.05) continue; const L = Math.hypot(Q.x - P.x, Q.y - P.y); for (let d = 0; d <= L; d += 0.08) mark(P.x + (Q.x - P.x) * d / L, P.y + (Q.y - P.y) * d / L, zt); }
+        }
+      }
+    }
+    // заполняем толщину стены между двумя гранями
+    const F = H.slice();
+    for (let j = 2; j < SNY - 2; j++) for (let i = 2; i < SNX - 2; i++) {
+      const k = j * SNX + i; if (H[k]) continue;
+      for (const [d, r] of [[1, 1], [SNX, 1], [1, 2], [SNX, 2]]) {
+        let a = 0, b = 0; for (let t = 1; t <= r; t++) { a = a || H[k - d * t]; b = b || H[k + d * t]; }
+        if (a && b && Math.abs(a - b) < 0.3) { F[k] = Math.max(a, b); break; }
+      }
+    }
+    const P = []; const s2 = SR / 2;
+    for (let j = 0; j < SNY; j++) { let i = 0; while (i < SNX) { const h = F[j * SNX + i]; if (!h) { i++; continue; } let e = i; while (e + 1 < SNX && Math.abs(F[j * SNX + e + 1] - h) < 0.02) e++; const x0 = wx(i) - s2, x1 = wx(e) + s2, y0 = wy(j) - s2, y1 = wy(j) + s2, z = h + 0.004; P.push(x0, y0, z, x1, y0, z, x1, y1, z, x0, y0, z, x1, y1, z, x0, y1, z); i = e + 1; } }
+    if (!P.length) continue;
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.computeVertexNormals();
+    const cap = new THREE.Mesh(geo, mat); cap.receiveShadow = true; cap.userData = { t: 'cap', s: f }; g.add(cap);
+  }
+}
+
 // перила и ступени крылец снаружи здания: на перила нельзя вставать, у ступеней не стоим толпой
 const OUT_STAIRS: number[][] = [];
 function blockOutdoorProps() {
@@ -693,12 +765,7 @@ function decideStudent__base(n, t, p, np) {
   // потребности
   const N = n.needs;
   if (N.bladder > (n.wcT || (n.wcT = rr(0.8, 1.1))) && R_WC && wcCount() < 6) { const c = randomCellIn(2, R_WC.id); N.bladder = 0; goTo(n, c, 'идёт в туалет'); return wait(n, rr(1.5, 3), 'idle', 'в туалете', { hide: true }); }
-  if (N.hunger > 0.6 && R_COWORK && toNext > 8) {
-    const inBuf = NPCS.filter(m => m.spawned && m.f === 2 && roomAt(2, m.x, m.y) === R_COWORK.id).length;
-    N.hunger = 0.05; N.energy = Math.min(1, N.energy + 0.3);
-    if (inBuf > 20 || (toNext > 40 && chance(0.4))) { n.backAt = simT + rr(20, 35); return leave(n, 'идёт обедать в столовую'); }
-    goTo(n, randomCellIn(2, R_COWORK.id), 'идёт в буфет'); return wait(n, rr(6, 14), chance(0.5) ? 'talk' : 'phone', chance(0.5) ? 'ест самсу и пьёт чай' : 'пьёт кофе');
-  }
+  if (N.hunger > 0.6 && toNext > 30) { N.hunger = 0.05; N.energy = Math.min(1, N.energy + 0.3); n.backAt = simT + rr(20, 30); return leave(n, 'идёт обедать в столовую'); }
   // друзья
   if (N.social < 0.85 || chance(n.traits.social)) {
     const friendsHere = [...n.friends.entries()].filter(([id, v]) => v > 0.35).map(([id]) => NPCS[id]).filter(m => m.spawned && m.f === n.f && m.f === 2);
@@ -881,14 +948,28 @@ function teachBehaviour__base(n, T, dt) {
 
 // ---------- лёгкое расталкивание ----------
 function separate(dt) {
-  const act = NPCS.filter(n => n.spawned && !n.hidden && n.pose === 'stand');
+  const act = NPCS.filter(n => n.spawned && !n.hidden && n.pose === 'stand' && !n.waitPath);
   for (let i = 0; i < act.length; i++) for (let j = i + 1; j < act.length; j++) {
     const a = act[i], b = act[j]; if (a.f !== b.f || Math.abs(a.z - b.z) > 0.5) continue;
-    const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy; if (d2 > 0.2 || d2 < 1e-6) continue;
-    const d = Math.sqrt(d2), push = (0.45 - d) * 0.5 * Math.min(1, dt * 10);
-    const ux = dx / d * push, uy = dy / d * push;
-    if (a.tasks[0]?.t !== 'sit' && pass(a.f, cx(a.x - ux), cy(a.y - uy))) { a.x -= ux; a.y -= uy; }
-    if (b.tasks[0]?.t !== 'sit' && pass(b.f, cx(b.x + ux), cy(b.y + uy))) { b.x += ux; b.y += uy; }
+    const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy; if (d2 > 0.25 || d2 < 1e-6) continue;
+    const d = Math.sqrt(d2), push = (0.5 - d) * 0.5 * Math.min(1, dt * 10);
+    let ux = dx / d * push, uy = dy / d * push;
+    // лоб в лоб: толкаем вбок, а не назад, иначе стоят друг против друга и крутятся
+    const ga = a.tasks[0]?.t === 'go', gb = b.tasks[0]?.t === 'go';
+    if (ga && gb && Math.cos(a.a - b.a) < -0.5) { const px = Math.sin(a.a) * push, py = -Math.cos(a.a) * push; ux = -px; uy = -py; }
+    const fa = a.tasks[0]?.t === 'sit', fb = b.tasks[0]?.t === 'sit';
+    if (!fa && clearW(a.f, a.x - ux, a.y - uy, 0.15)) { a.x -= ux; a.y -= uy; a.pushed = true; }
+    if (!fb && clearW(b.f, b.x + ux, b.y + uy, 0.15)) { b.x += ux; b.y += uy; b.pushed = true; }
+  }
+  // не стоим вплотную к стене/окну: иначе локоть и ноутбук торчат наружу
+  const k = Math.min(1, dt * 4);
+  for (const n of act) {
+    if (n.f > 3 || n.tasks[0]?.t === 'sit') continue; const p = n.path && n.path[n.pi]; if (p && p.st) continue;
+    let ax = 0, ay = 0;
+    for (let q = 0; q < 8; q++) { const a = q * Math.PI / 4, ox = Math.cos(a), oy = Math.sin(a); if (!passW(n.f, n.x + ox * 0.3, n.y + oy * 0.3)) { ax -= ox; ay -= oy; } }
+    const L = Math.hypot(ax, ay); if (L < 0.5) continue;
+    const mx = ax / L * 0.06 * k, my = ay / L * 0.06 * k;
+    if (passW(n.f, n.x + mx, n.y + my)) { n.x += mx; n.y += my; n.pushed = true; }
   }
 }
 
@@ -1059,7 +1140,7 @@ async function initSim() {
   populate(); evPopulate();
   buildBodies(); evBodies();
   buildScreens();
-  simUI(); worldUI(); buildTraffic(); evInit();
+  simUI(); worldUI(); buildTraffic(); try { buildWalkers(); } catch (e) { console.warn('walkers', e); } evInit();
   const now = bishkekNow(); simDow = now.dow; setSunDay(now.doy); pickWeather(now.doy, now.dow);
   goLive();
 }

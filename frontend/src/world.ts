@@ -31,6 +31,8 @@ const CITY: any = {
     [-80, -50, 60, 120, 15, 0xd0c4ae], [60, 70, 145, 175, 10, 0xd8cbb4], [-20, 30, 146, 180, 18, 0xc9c0b0]],
   field: [-29, 14, -76, -39],
 };
+// у части домов y0 > y1: коробка выходила вывернутой наизнанку и казалась недостроенной
+CITY.blocks.forEach(b => { if (b[0] > b[1]) [b[0], b[1]] = [b[1], b[0]]; if (b[2] > b[3]) [b[2], b[3]] = [b[3], b[2]]; });
 const W: any = { lampMats: [], lights: [], flag: null, stars: null, mts: [], glass: [], amb: null, treeCrowns: [], grassMats: [] };
 const C = (h) => new THREE.Color(h);
 function seasonOf(doy) { const m = new Date(Date.UTC(2026, 0, doy)).getUTCMonth(); return m <= 1 || m === 11 ? 'winter' : m <= 3 ? 'spring' : m <= 7 ? 'summer' : m === 8 ? 'early' : 'autumn'; }
@@ -121,8 +123,9 @@ function buildWorld() {
     const pm = new Uint8Array(n * 4);
     for (let k = 0; k < n; k++) if (paved[k]) pm[k * 4] = 255;
     const red = (x: number, y: number, w: number) => { const R = Math.ceil(w / 2 / SR); const i0 = cx(x), j0 = cy(y); for (let j = j0 - R; j <= j0 + R; j++) for (let i = i0 - R; i <= i0 + R; i++) { if (i < 0 || j < 0 || i >= SNX || j >= SNY) continue; const k = j * SNX + i; if (paved[k] && Math.hypot(wx(i) - x, wy(j) - y) <= w / 2) pm[k * 4 + 1] = 255; } };
-    segs.slice(0, segs.length - 4).forEach(sg => { const L = Math.hypot(sg[2] - sg[0], sg[3] - sg[1]); const w = Math.min(1.3, sg[4] * 0.42); for (let d = 0; d <= L; d += SR) red(sg[0] + (sg[2] - sg[0]) * d / L, sg[1] + (sg[3] - sg[1]) * d / L, w); });
-    for (let a = 0; a < 6.3; a += 0.02) red(plaza.x + Math.cos(a) * (plaza.r - 0.9), plaza.y + Math.sin(a) * (plaza.r - 0.9), 0.7);
+    // красные полосы убраны: двор однотонной серой брусчаткой
+    if (0) segs.slice(0, segs.length - 4).forEach(sg => { const L = Math.hypot(sg[2] - sg[0], sg[3] - sg[1]); const w = Math.min(1.3, sg[4] * 0.42); for (let d = 0; d <= L; d += SR) red(sg[0] + (sg[2] - sg[0]) * d / L, sg[1] + (sg[3] - sg[1]) * d / L, w); });
+    if (0) for (let a = 0; a < 6.3; a += 0.02) red(plaza.x + Math.cos(a) * (plaza.r - 0.9), plaza.y + Math.sin(a) * (plaza.r - 0.9), 0.7);
     const PT = new THREE.DataTexture(pm, SNX, SNY, THREE.RGBAFormat); PT.magFilter = PT.minFilter = THREE.LinearFilter; PT.needsUpdate = true;
     W.paveMask = pm;
     const mt = ym.material as any;
@@ -162,7 +165,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
   const far = []; const inR = (x, y, m = 0) => CITY.blocks.some(b => x > b[0] - m && x < b[1] + m && y > b[2] - m && y < b[3] + m) || CITY.roads.some(r => x > r[0] - 1 && x < r[1] + 1 && y > r[2] - 1 && y < r[3] + 1) || (x > SX0 - 2 && x < X1 + 2 && y > SY0 - 2 && y < Y1 + 2);
   for (let y = -290; y < 290; y += rr(7, 9)) { [-34.2, -46.5].forEach(x => { if (!inR(x, y)) far.push({ x, y, k: chance(0.3) ? 'poplar' : 'elm', far: true }); }); [86, 98, 115, 127].forEach(x => { if (!inR(x, y + rr(-1, 1))) far.push({ x, y, k: 'elm', far: true, big: true }); }); }
   for (let x = -290; x < 290; x += rr(7, 9)) [-80.5, -101.5, 128.5, 142].forEach(y => { if (!inR(x, y)) far.push({ x, y, k: chance(0.35) ? 'poplar' : 'elm', far: true }); });
-  for (let t = 0; t < 500 && far.length < 700; t++) { const x = rr(-260, 260), y = rr(-260, 260); if (Math.hypot(x, y) < 45 || inR(x, y, 2.5)) continue; far.push({ x, y, k: chance(0.3) ? 'poplar' : 'elm', far: true }); }
+  for (let t = 0; t < 4000 && far.length < 1300; t++) { const x = rr(-260, 260), y = rr(-260, 260); const F = CITY.field; if (Math.hypot(x, y) < 45 || inR(x, y, 2.5) || (x > F[0] - 3 && x < F[1] + 3 && y > F[2] - 3 && y < F[3] + 3)) continue; far.push({ x, y, k: chance(0.3) ? 'poplar' : 'elm', far: true }); }
   trees.length = 0;   // двор — только газон и брусчатка (пожелание директора): деревья только в городе
   const all = trees.concat(far);
   const trunkG = new THREE.CylinderGeometry(0.11, 0.17, 1, 6); trunkG.translate(0, 0.5, 0);
@@ -412,7 +415,7 @@ function buildTraffic() {
   };
   // маршруты: Раззакова (на юг), Токтогула (на запад, 2 полосы), Эркиндик (юг/север), Киевская (на восток)
   const R = [{ x: -40.5, y: 300, dx: 0, dy: -1, n: 5 }, { x: 300, y: -87, dx: -1, dy: 0, n: 6, stop: -5 }, { x: 300, y: -92.5, dx: -1, dy: 0, n: 5 }, { x: 75.5, y: 300, dx: 0, dy: -1, n: 4, stop: -40 }, { x: 137.5, y: -300, dx: 0, dy: 1, n: 4 }, { x: -300, y: 135, dx: 1, dy: 0, n: 3 }];
-  R.forEach((r, ri) => { for (let i = 0; i < r.n; i++) { const bus = r.stop != null && i % 3 === 0; CARS.push({ g: mk(bus), bus, r, s: rr(0, 600), v: bus ? rr(8, 10) : rr(9, 14), stop: 0, stopped: false, active: true }); } });
+  R.forEach((r, ri) => { for (let i = 0; i < r.n * 2; i++) { const bus = r.stop != null && i % 3 === 0; CARS.push({ g: mk(bus), bus, r, s: rr(0, 600), v: bus ? rr(8, 10) : rr(9, 14), stop: 0, stopped: false, active: true }); } });
   // припаркованные машины вдоль Раззакова и у Дипакадемии
   for (let y = -70; y < 120; y += rr(5.5, 9)) { if (Math.abs(y + 31.4) < 6 || Math.abs(y - 30.2) < 6) continue; const g = mk(false); g.position.set(-43, OUTZ + 0.02, -y); scene.add(g); }
   for (let y = -48; y < 4; y += rr(5, 7)) { const g = mk(false); g.position.set(64.5, OUTZ + 0.02, -y); g.rotation.y = Math.PI / 2 + (chance(0.5) ? Math.PI : 0); }
@@ -424,7 +427,43 @@ function buildTraffic() {
   shelter.add(roofS, backS, benchS); [-1.9, 1.9].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4), new THREE.MeshStandardMaterial({ color: 0x333 })); p.position.set(-0.7, 1.2, z); shelter.add(p); });
   shelter.position.set(-5, OUTZ, 81.6); shelter.rotation.y = Math.PI / 2; scene.add(shelter); shelter.traverse((o: any) => { if (o.isMesh) o.castShadow = true; });
 }
+// прохожие на тротуарах: город живёт, пока в корпусе идут пары
+const WALKERS: any = { list: [], body: null, head: null, legs: null };
+function buildWalkers() {
+  const N = 160, skin = [0xe0b48c, 0xd2a27a, 0xc68d64, 0xb07a55], cloth = [0x2a3442, 0x3d4a5c, 0x7a2e2e, 0x1f1f22, 0x5b6b4a, 0x8a7a66, 0x2f5d8a, 0x6b3d6b, 0xb3a58e, 0x444a50];
+  const bodyG = new THREE.CylinderGeometry(0.17, 0.2, 0.68, 8); bodyG.translate(0, 1.18, 0);
+  const legG = new THREE.CylinderGeometry(0.07, 0.06, 0.84, 6); legG.translate(0, -0.42, 0);
+  const headG = new THREE.SphereGeometry(0.115, 10, 8); headG.translate(0, 1.66, 0);
+  const mat = () => new THREE.MeshStandardMaterial({ roughness: 0.8 });
+  WALKERS.body = new THREE.InstancedMesh(bodyG, mat(), N); WALKERS.head = new THREE.InstancedMesh(headG, mat(), N); WALKERS.legs = new THREE.InstancedMesh(legG, mat(), N * 2);
+  const strips = CITY.walks.filter(w => !(w[0] > SX0 - 6 && w[1] < SX0 + SNX * SR + 6 && w[2] > SY0 - 6 && w[3] < SY0 + SNY * SR + 6));
+  for (let i = 0; i < N; i++) {
+    const w = pick(strips), vert = w[1] - w[0] < w[3] - w[2];
+    const c = { w, vert, u: rr(-250, 250), o: rr(0.25, 0.75), v: rr(1.0, 1.5) * (chance(0.5) ? 1 : -1), ph: rr(0, 6), stopT: 0 };
+    WALKERS.list.push(c);
+    WALKERS.body.setColorAt(i, C(pick(cloth))); WALKERS.head.setColorAt(i, C(pick(skin))); const lc = C(pick([0x1d2430, 0x2b2b2e, 0x3a4250, 0x4a3b30])); WALKERS.legs.setColorAt(i * 2, lc); WALKERS.legs.setColorAt(i * 2 + 1, lc);
+  }
+  [WALKERS.body, WALKERS.head, WALKERS.legs].forEach(m => { m.castShadow = true; m.frustumCulled = false; scene.add(m); });
+}
+const _wm = new THREE.Matrix4(), _wq = new THREE.Quaternion(), _wp = new THREE.Vector3(), _ws = new THREE.Vector3(1, 1, 1), _wy = new THREE.Vector3(0, 1, 0), _wx = new THREE.Vector3(1, 0, 0), _wq2 = new THREE.Quaternion();
+function walkersFrame(dt) {
+  if (!WALKERS.body) return; const k = Math.min(simSpeed, 6); const d = dt * k;
+  const h = simT / 60, busy = h < 6 ? 0.1 : h < 7.5 ? 0.45 : h < 21 ? 1 : h < 23 ? 0.4 : 0.1;
+  WALKERS.list.forEach((c, i) => {
+    const on = (i / WALKERS.list.length) < busy;
+    if (!on) { _wm.makeScale(0, 0, 0); WALKERS.body.setMatrixAt(i, _wm); WALKERS.head.setMatrixAt(i, _wm); WALKERS.legs.setMatrixAt(i * 2, _wm); WALKERS.legs.setMatrixAt(i * 2 + 1, _wm); return; }
+    if (c.stopT > 0) c.stopT -= d; else { c.u += c.v * d; c.ph += Math.abs(c.v) * d * 5.2; if (chance(0.0006 * k)) c.stopT = rr(3, 12); }
+    if (c.u > 250) c.v = -Math.abs(c.v); if (c.u < -250) c.v = Math.abs(c.v);
+    const w = c.w; const x = c.vert ? w[0] + (w[1] - w[0]) * c.o : c.u, y = c.vert ? c.u : w[2] + (w[3] - w[2]) * c.o;
+    const yaw = c.vert ? (c.v > 0 ? Math.PI : 0) : (c.v > 0 ? Math.PI / 2 : -Math.PI / 2);
+    const sw = c.stopT > 0 ? 0 : Math.sin(c.ph) * 0.45, bob = c.stopT > 0 ? 0 : Math.abs(Math.cos(c.ph)) * 0.03;
+    _wq.setFromAxisAngle(_wy, yaw); _wp.set(x, OUTZ + bob, -y); _wm.compose(_wp, _wq, _ws); WALKERS.body.setMatrixAt(i, _wm); WALKERS.head.setMatrixAt(i, _wm);
+    for (const s of [-1, 1]) { _wq2.setFromAxisAngle(_wx, sw * s); const q = _wq.clone().multiply(_wq2); const off = new THREE.Vector3(0.09 * s, 0.86, 0).applyQuaternion(_wq); _wm.compose(_wp.clone().add(off), q, _ws); WALKERS.legs.setMatrixAt(i * 2 + (s > 0 ? 1 : 0), _wm); }
+  });
+  WALKERS.body.instanceMatrix.needsUpdate = WALKERS.head.instanceMatrix.needsUpdate = WALKERS.legs.instanceMatrix.needsUpdate = true;
+}
 function trafficFrame(dt) {
+  walkersFrame(dt);
   const k = Math.min(simSpeed, 6); if (!k) return; const d = dt * k;
   const h = simT / 60, busy = h < 6 ? 0.2 : h < 7 ? 0.5 : h < 22 ? 1 : 0.35;
   for (const c of CARS) {

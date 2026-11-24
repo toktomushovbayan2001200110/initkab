@@ -25,11 +25,20 @@ function buildDoors() {
     const dbl = W > 1.3, mid = (lo + hi) / 2;
     const parts = [];
     let tmin = 1e9, tmax = -1e9;
+    // само полотно — тонкая пластина; раньше брали всю толщину проёма (наличники, коробку),
+    // и «дверь» толщиной со стену поворачивалась посреди проёма и загораживала вход
+    const inBox = (p, t) => { for (let k = 0; k < 3; k++) { const v = [p.getX(t + k), p.getY(t + k)], z = p.getZ(t + k) - z0; if (v[ax] < lo - 0.003 || v[ax] > hi + 0.003 || v[ox] < mn[ox] - 0.01 || v[ox] > mx[ox] + 0.01 || z < 0.005 || z > 1.985) return false; } return true; };
+    const os = [];
+    for (const m of src) { const p = m.geometry.attributes.position; for (let t = 0; t < p.count; t += 3) if (inBox(p, t)) { const zs = [p.getZ(t), p.getZ(t + 1), p.getZ(t + 2)]; if (Math.max(...zs) - Math.min(...zs) > 0.3) for (let k = 0; k < 3; k++) os.push([p.getX(t + k), p.getY(t + k)][ox]); } }
+    if (!os.length) continue;
+    os.sort((a, b) => a - b); let bc = os[0], bn = 0;
+    for (let a = 0, b = 0; a < os.length; a++) { while (b < os.length && os[b] - os[a] <= 0.075) b++; if (b - a > bn) { bn = b - a; bc = os[a]; } }
+    const band0 = bc - 0.005, band1 = bc + 0.08;
     for (const m of src) {
       const p = m.geometry.attributes.position, keep = [];
       for (let t = 0; t < p.count; t += 3) {
         let ok = true;
-        for (let k = 0; k < 3 && ok; k++) { const v = [p.getX(t + k), p.getY(t + k)], z = p.getZ(t + k) - z0; if (v[ax] < lo - 0.003 || v[ax] > hi + 0.003 || v[ox] < mn[ox] - 0.01 || v[ox] > mx[ox] + 0.01 || z < 0.005 || z > 1.985) ok = false; }
+        for (let k = 0; k < 3 && ok; k++) { const v = [p.getX(t + k), p.getY(t + k)], z = p.getZ(t + k) - z0; if (v[ax] < lo - 0.003 || v[ax] > hi + 0.003 || v[ox] < band0 || v[ox] > band1 || z < 0.005 || z > 1.985) ok = false; }
         if (ok && dbl) { const vs = [0, 1, 2].map(k => [p.getX(t + k), p.getY(t + k)][ax]); if (Math.min(...vs) < mid - 0.03 && Math.max(...vs) > mid + 0.03) ok = false; }
         if (ok) keep.push(t);
       }

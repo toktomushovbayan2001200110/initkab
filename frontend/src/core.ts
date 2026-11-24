@@ -28,7 +28,12 @@ host.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(40,1,0.1,1500);
 const controls=new THREE.OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true; controls.dampingFactor=0.09; controls.rotateSpeed=0.55; controls.panSpeed=0.9; controls.zoomSpeed=0.9;
+controls.enableDamping=true; controls.dampingFactor=0.12; controls.rotateSpeed=0.6; controls.panSpeed=1.0; controls.zoomSpeed=0.9;
+// как в градостроительных играх: левая кнопка тащит карту по земле, правая вращает, колесо — масштаб к курсору
+controls.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};
+controls.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_ROTATE};
+controls.screenSpacePanning=false;
+controls.addEventListener('change',()=>{ const t=controls.target; const cl=(v,a,b)=>Math.max(a,Math.min(b,v)); const nx=cl(t.x,-160,160), nz=cl(t.z,-160,160), ny=cl(t.y,-1,12); if(nx!==t.x||nz!==t.z||ny!==t.y){ const d=new THREE.Vector3(nx-t.x,ny-t.y,nz-t.z); t.add(d); camera.position.add(d); } });
 controls.maxPolarAngle=Math.PI*0.485; controls.minDistance=1.2; controls.maxDistance=320;
 
 function skyMaterial(){
@@ -219,9 +224,9 @@ renderer.domElement.addEventListener('pointerup',e=>{
   mp.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
   ray.setFromCamera(mp,camera);
   if(typeof pickNPC==='function'){ const nn=pickNPC(ray); if(nn){ selectNPC(nn); if(MOBILE) document.body.classList.add('exp-open'); return; } }
+  const p=document.getElementById('pick'); p.style.display='none'; return;
   const hit=ray.intersectObjects(pickables.filter(o=>o.visible&&o.parent.visible),false)[0];
-  const p=document.getElementById('pick');
-  if(!hit){p.style.display='none';return;}
+  if(!hit){return;}
   const u=hit.object.userData;
   p.style.display='block';
   p.innerHTML=`<b>${ONE_RU[u.t]||u.t}</b> · ${FLOOR_NAMES[u.s]}<br>Высота точки: ${fmtLvl(hit.point.y)} м`;

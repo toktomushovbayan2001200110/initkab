@@ -250,6 +250,39 @@ function campusInterior() {
   })));
 }
 
+// ---------- 7б. стулья: вместо тонких серых каркасов — стул с буковым сиденьем и спинкой на чёрных ножках ----------
+function campusChairs() {
+  const v = new THREE.Vector3(); const groups = [];
+  storeyG[2].children.forEach((o: any) => {
+    if (!o.isInstancedMesh || o.count < 50 || !furnObjs.includes(o)) return;
+    o.geometry.computeBoundingBox(); const bb = o.geometry.boundingBox, sz = bb.getSize(v);
+    if (sz.x > 0.32 && sz.x < 0.5 && sz.y > 0.32 && sz.y < 0.5 && sz.z > 0.65 && sz.z < 0.9) groups.push(o);
+  });
+  if (!groups.length) return;
+  // где спинка: высокие вершины смещены от центра в сторону спинки
+  const bb = new THREE.Box3(); groups.forEach(o => bb.union(o.geometry.boundingBox)); const c = bb.getCenter(new THREE.Vector3());
+  let sx = 0, sy = 0, n = 0; groups.forEach(o => { const P = o.geometry.attributes.position; for (let i = 0; i < P.count; i++) if (P.getZ(i) > bb.min.z + 0.6) { sx += P.getX(i) - c.x; sy += P.getY(i) - c.y; n++; } });
+  const back = n ? Math.atan2(sy / n, sx / n) : 0;
+  const z0 = bb.min.z, W = 0.42, D = 0.42, SH = 0.45;
+  // собираем стул в локальных осях: спинка по +X, потом поворачиваем к найденной стороне
+  const wood = [], metal = [];
+  const box = (arr, w, d, h, x, y, z, rx = 0) => { const g = new THREE.BoxGeometry(w, d, h); if (rx) g.rotateY(rx); g.translate(x, y, z); arr.push(g); };
+  box(wood, D, W, 0.025, 0, 0, z0 + SH);                                     // сиденье
+  { const g = new THREE.BoxGeometry(0.022, W - 0.02, 0.2); g.rotateY(-0.12); g.translate(D / 2 - 0.01, 0, z0 + 0.73); wood.push(g); }   // спинка с наклоном
+  for (const [x, y] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) box(metal, 0.022, 0.022, SH - 0.012, x * (D / 2 - 0.03), y * (W / 2 - 0.03), z0 + (SH - 0.012) / 2);
+  for (const y of [-1, 1]) { const g = new THREE.BoxGeometry(0.02, 0.02, 0.36); g.rotateY(-0.12); g.translate(D / 2 - 0.02, y * (W / 2 - 0.03), z0 + SH + 0.17); metal.push(g); }
+  box(metal, D - 0.06, 0.016, 0.016, 0, -(W / 2 - 0.03), z0 + 0.12); box(metal, D - 0.06, 0.016, 0.016, 0, W / 2 - 0.03, z0 + 0.12);
+  const merge = arr => { const g = BGU.mergeBufferGeometries(arr.map(a => a.toNonIndexed())); g.rotateZ(back); g.translate(c.x, c.y, 0); g.computeVertexNormals(); return g; };
+  const woodTex = (() => { const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64; const q = cv.getContext('2d'); q.fillStyle = '#c99a62'; q.fillRect(0, 0, 64, 64); for (let i = 0; i < 30; i++) { q.strokeStyle = `rgba(120,70,30,${0.1 + Math.random() * 0.15})`; q.beginPath(); q.moveTo(0, Math.random() * 64); q.bezierCurveTo(20, Math.random() * 64, 40, Math.random() * 64, 64, Math.random() * 64); q.stroke(); } const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return t; })();
+  const wm = new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex, roughness: 0.55 }), mm = new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.35, metalness: 0.6 });
+  const src = groups[0];
+  for (const [geo, mat] of [[merge(wood), wm], [merge(metal), mm]] as any) {
+    const im = new THREE.InstancedMesh(geo, mat, src.count); im.instanceMatrix.copy(src.instanceMatrix); im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.matrixAutoUpdate = false; im.matrix.copy(src.matrix);
+    im.castShadow = true; im.receiveShadow = true; im.userData = { ...src.userData }; storeyG[2].add(im); furnObjs.push(im);
+  }
+  groups.forEach(o => { o.visible = false; const i = furnObjs.indexOf(o); if (i >= 0) furnObjs.splice(i, 1); });
+}
+
 // ---------- 8. общежитие через ул. Раззакова ----------
 function campusDorm() {
   const b = CITY.blocks.find(q => q[6] === 'Общежитие'); if (!b) return;
@@ -292,7 +325,7 @@ function campusUI() {
   const st = document.createElement('style');
   st.textContent = `body.clean #ctrl, body.clean #exp { display: none !important; }
   #cleanBtn { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; border: 1px solid var(--line, #ddd); background: var(--panel, #fff); border-radius: 18px; padding: 6px 14px; font: 600 12.5px system-ui, sans-serif; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
-  #sSpeed, #sMorning, #sJumpPair, #sJumpBreak, #adminBox, #todayBox, #tbl, #dims, #exp > h2 { display: none !important; }`;
+  #ticker, #sSpeed, #sMorning, #sJumpPair, #sJumpBreak, #adminBox, #todayBox, #tbl, #dims, #exp > h2 { display: none !important; }`;
   document.head.appendChild(st);
   const b = document.createElement('button'); b.id = 'cleanBtn'; b.textContent = '⤢ Во весь экран';
   b.onclick = () => { document.body.classList.toggle('clean'); b.textContent = document.body.classList.contains('clean') ? '☰ Показать панели' : '⤢ Во весь экран'; };
@@ -319,7 +352,7 @@ function campusFrame() {
 }
 
 function buildCampus() {
-  const steps: [string, () => void][] = [['facade', campusFacade], ['ac', campusAC], ['interior', campusInterior], ['dorm', campusDorm], ['ui', campusUI]];
+  const steps: [string, () => void][] = [['facade', campusFacade], ['ac', campusAC], ['interior', campusInterior], ['chairs', campusChairs], ['dorm', campusDorm], ['ui', campusUI]];
   for (const [n, f] of steps) { try { f(); } catch (e) { console.error('campus ' + n, e); } }
   // точки во дворе, которые теперь заняты, убираем из списка мест для прогулок
   for (let i = YARD.length - 1; i >= 0; i--) { const [x, y] = YARD[i]; const k = cy(y) * SNX + cx(x); if (GRID[3][k] !== -2) YARD.splice(i, 1); }
