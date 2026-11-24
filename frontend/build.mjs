@@ -1,6 +1,6 @@
 // Сборка 3D-модели в один HTML-файл: TypeScript (уже скомпилированный tsc в build/) + шаблон + данные.
 // Результат: ../campus/viewer/index.html (Django) и build/korpus-artifact.html (артефакт claude.ai).
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,7 +8,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const read = (p) => readFileSync(join(root, p), 'utf8');
 
 // Порядок важен: все файлы — один общий <script>, модули оборачивают функции предыдущих.
-export const ORDER = ['hooks', 'core', 'sim', 'people', 'world', 'events', 'design', 'brain', 'doors', 'campus', 'main'];
+export const ORDER = ['hooks', 'core', 'sim', 'people', 'world', 'events', 'design', 'brain', 'doors', 'campus', 'azamat', 'main'];
 
 const app = ORDER.map((m) => `// ---- ${m}.ts ----\n` + read(`build/${m}.js`)).join('\n');
 if (app.includes('</script')) throw new Error('В коде встретилось </script — сломает HTML');
@@ -21,6 +21,7 @@ const put = (key, value) => {
 put('/*__APP__*/', app);
 put('__SIM__', read('data/sim.json').replace(/<\//g, '<\\/'));
 put('__DATA__', read('data/data.b64').trim());
+put('__AZAMAT__', existsSync(join(root, 'data/azamat.glb')) ? readFileSync(join(root, 'data/azamat.glb')).toString('base64') : '');
 
 writeFileSync(join(root, '../campus/viewer/index.html'), html);
 

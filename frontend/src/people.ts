@@ -216,7 +216,7 @@ let POSE_NOW = 0, POSE_DT = 0.016, POSE_LAST = 0;
 const TG = {};
 function poseNPC__base(n, i, vis) {
   if (i === 0) { POSE_NOW = performance.now(); POSE_DT = Math.min(0.1, (POSE_NOW - POSE_LAST) / 1000) || 0.016; POSE_LAST = POSE_NOW; if (COLOR_DIRTY) markColors(); }
-  if (!vis) { if (n.shown !== false) { n.shown = false; n.J = null; for (const p of PARTS1) setP(p, i, ZERO); for (const p of PARTS2) { setP(p, i * 2, ZERO); setP(p, i * 2 + 1, ZERO); } } return; }
+  if (!vis) { azHide(n); if (n.shown !== false) { n.shown = false; n.J = null; for (const p of PARTS1) setP(p, i, ZERO); for (const p of PARTS2) { setP(p, i * 2, ZERO); setP(p, i * 2 + 1, ZERO); } } return; }
   n.shown = true;
   const k = n.k, t = n.phase, now = POSE_NOW;
   const sit = n.pose === 'sit', crouch = n.pose === 'crouch';
@@ -283,6 +283,8 @@ function poseNPC__base(n, i, vis) {
   let J = n.J;
   if (!J) { J = n.J = {}; for (const key of JK) J[key] = T[key]; }
   else { const al = 1 - Math.exp(-POSE_DT * (w > 0.3 ? 16 : 9)); for (const key of JK) J[key] += (T[key] - J[key]) * al; }
+  if (AZ.ready && n.az === undefined) azMaybe(n);
+  if (n.az && azPose(n, i, J, bob)) return;
   // ---- матрицы ----
   const yOff = floorYOff(n.f);
   const coat = n.coatOn ? 1.14 : (n.fit === 'hoodie' || n.fit === 'jacket' || n.fit === 'cardigan' ? 1.05 : 1);
