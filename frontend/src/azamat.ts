@@ -1,8 +1,16 @@
-// Азамат: настоящая модель студента из Blender (GLB) вместо собранного из примитивов тела.
+// Люди из Blender (GLB) вместо собранных из примитивов тел: студенты, студентки, преподаватели.
 // Скелет двигается теми же углами, что и процедурные люди (poseNPC → J), поэтому Азамат умеет всё:
 // ходить, сидеть, печатать, писать, поднимать руку, говорить по телефону.
-const AZ_B64 = "__AZAMAT__";
-const AZ: any = { ready: false, src: null, bones: [], list: [], max: 48, h: 1.75, tintMats: [] };
+// Набор персонажей (Blender → GLB, общий скелет Азамата): студенты, студентки, преподаватели.
+// Файлы лежат рядом со страницей (npc/*.glb), в Django — /static/campus/npc/.
+const AZ: any = { ready: false, tpl: {}, list: [], max: 170 };
+const AZ_CAST = {
+  stuM: ['stu_m1', 'stu_m2', 'stu_m3', 'stu_m4', 'azamat'],
+  stuF: ['stu_f1', 'stu_f2', 'stu_f3', 'stu_f4'],
+  tchM: ['tch_m1', 'tch_m2'],
+  tchF: ['tch_f1', 'tch_f2'],
+};
+const AZ_BASE = (window as any).NPC_BASE || ((window as any).KGU ? '/static/campus/npc/' : 'npc/');
 
 // Какие кости чем управляются. side: 'R' у процедурных людей = +X = анатомически левая рука/нога (суффикс _l).
 type AzDrive = { re: RegExp; get: (J: any, n: any) => number[]; target?: number[]; share?: number };
@@ -26,7 +34,8 @@ const AZ_DRIVE: AzDrive[] = [
 
 const _aq = new THREE.Quaternion(), _aq2 = new THREE.Quaternion(), _ae = new THREE.Euler(), _av = new THREE.Vector3(), _av2 = new THREE.Vector3();
 
-function azPrep(scene: any) {
+function azPrep(scene: any): any {
+  const T: any = { src: scene };
   scene.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(scene.matrixWorld).invert();
   const all: any[] = [];
@@ -55,12 +64,12 @@ function azPrep(scene: any) {
     I.Kp = par ? par.K.clone() : new THREE.Quaternion();
     I.Wp = par ? par.W.clone() : new THREE.Quaternion();
   }
-  AZ.bones = order.map(b => info.get(b)).filter(I => I.drive || !I.K.equals(I.Kp));
-  // голова: верх черепа ≈ head + 0.2 м
-  const head = all.find(b => /^head$/i.test(b.name));
-  AZ.h = head ? info.get(head).P.y + 0.19 : top;
-  AZ.found = AZ.bones.map((I: any) => I.b.name);
-  return AZ.bones.length;
+  T.bones = order.map(b => info.get(b)).filter(I => I.drive || !I.K.equals(I.Kp));
+  // голова: верх черепа ≈ head + 0.19 м; таз — для посадки на стул
+  const head = all.find(b => /^head$/i.test(b.name)), pel = all.find(b => /^pelvis$/i.test(b.name));
+  T.h = head ? info.get(head).P.y + 0.19 : top;
+  T.hip = pel ? info.get(pel).P.y : T.h * 0.53;
+  return T;
 }
 
 // local' = Wp⁻¹ · (Kp⁻¹ · R · K) · Wp · L   (R — поворот из углов J в системе модели)
@@ -71,30 +80,30 @@ function azSetBone(I: any, bone: any, x: number, y: number, z: number) {
   bone.quaternion.copy(_aq);
 }
 
+function azPrepMats(scene: any) {
+  scene.traverse((o: any) => {
+    if (!o.isMesh) return;
+    o.castShadow = /body|vest|shirt|pants|jean|trouser|hoodie|sweater|jacket|blazer|cardigan|skirt/i.test(o.name + (o.material && o.material.name));
+    o.receiveShadow = false;
+    const ms = Array.isArray(o.material) ? o.material : [o.material];
+    ms.forEach((m: any) => { if (m.map) m.map.anisotropy = 4; if (/hair|brow|lash/i.test(m.name)) { m.alphaTest = 0.5; m.transparent = false; m.side = THREE.DoubleSide; } });
+  });
+}
 function azLoad() {
-  if (!AZ_B64 || AZ_B64.charAt(0) === '_' || !(THREE as any).GLTFLoader) return;
-  try {
-    const raw = Uint8Array.from(atob(AZ_B64), c => c.charCodeAt(0));
-    new (THREE as any).GLTFLoader().parse(raw.buffer, '', (g: any) => {
-      AZ.src = g.scene; AZ.clips = g.animations;
-      azPrep(g.scene);
-      g.scene.traverse((o: any) => {
-        if (!o.isMesh) return;
-        o.castShadow = /body|vest|shirt|pants|jean|trouser/i.test(o.name + (o.material && o.material.name));
-        o.receiveShadow = false;
-        const ms = Array.isArray(o.material) ? o.material : [o.material];
-        ms.forEach((m: any) => { if (m.map) m.map.anisotropy = 4; if (/hair|brow|lash/i.test(m.name)) { m.alphaTest = 0.5; m.transparent = false; m.side = THREE.DoubleSide; } });
-      });
-      AZ.ready = true;
-    }, (e: any) => console.warn('Азамат не загрузился', e));
-  } catch (e) { console.warn('Азамат не загрузился', e); }
+  const GL = (THREE as any).GLTFLoader; if (!GL) return;
+  const ids = ([] as string[]).concat(...Object.values(AZ_CAST));
+  ids.forEach(id => {
+    fetch(AZ_BASE + id + '.glb').then(r => { if (!r.ok) throw new Error(r.status + ''); return r.arrayBuffer(); })
+      .then(buf => new GL().parse(buf, '', (g: any) => { const T = azPrep(g.scene); T.id = id; azPrepMats(g.scene); AZ.tpl[id] = T; AZ.ready = true; }, (e: any) => console.warn('персонаж ' + id, e)))
+      .catch(e => console.warn('персонаж ' + id + ' не загрузился', e));
+  });
 }
 
 const AZ_SHIRT = [0xffffff, 0xdfe6ee, 0xcfdcec, 0xeae3d6, 0xe9dada, 0xd7e3d4];
 const AZ_PANTS = [0xffffff, 0xb9c4d9, 0xd2c6b4, 0x9aa1aa, 0xc0b6a8];
-function azMake(n: any) {
+function azMake(n: any, T: any) {
   const SU = (THREE as any).SkeletonUtils;
-  const g = SU ? SU.clone(AZ.src) : AZ.src.clone(true);
+  const g = SU ? SU.clone(T.src) : T.src.clone(true);
   const bones: any = {}; g.traverse((o: any) => { if (o.isBone) bones[o.name] = o; });
   const meshes: any = {};
   const rnd2 = (k: number) => { const v = Math.sin((n.seed || 1) * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
@@ -102,15 +111,15 @@ function azMake(n: any) {
     if (!o.isMesh) return; meshes[o.name] = o;
     const nm = (o.name + ' ' + (o.material && o.material.name)).toLowerCase();
     // небольшое разнообразие: цвет рубашки и брюк, калпак не у всех, ноутбук только при ходьбе
-    if (/shirt|рубаш/.test(nm)) { o.material = o.material.clone(); o.material.color.setHex(AZ_SHIRT[Math.floor(rnd2(1) * AZ_SHIRT.length)]); }
-    else if (/pants|jean|trouser|брюк/.test(nm)) { o.material = o.material.clone(); o.material.color.setHex(AZ_PANTS[Math.floor(rnd2(2) * AZ_PANTS.length)]); }
+    if (T.id === 'azamat' && /shirt|рубаш/.test(nm)) { o.material = o.material.clone(); o.material.color.setHex(AZ_SHIRT[Math.floor(rnd2(1) * AZ_SHIRT.length)]); }
+    else if (T.id === 'azamat' && /pants|jean|trouser|брюк/.test(nm)) { o.material = o.material.clone(); o.material.color.setHex(AZ_PANTS[Math.floor(rnd2(2) * AZ_PANTS.length)]); }
     if (/kalpak|калпак|hat|cap/.test(nm)) o.visible = false;   // без головных уборов
     if (/backpack|рюкзак/.test(nm) && !n.bag) o.visible = false;
   });
-  const drv = AZ.bones.map((I: any) => ({ I, bone: bones[I.b.name] })).filter((x: any) => x.bone);
+  const drv = T.bones.map((I: any) => ({ I, bone: bones[I.b.name] })).filter((x: any) => x.bone);
   g.visible = false; g.matrixAutoUpdate = true;
   scene.add(g);
-  return { g, drv, meshes, laptop: Object.values(meshes).filter((m: any) => /laptop|ноут/i.test(m.name + (m.material && m.material.name))), lapOn: true };
+  return { g, drv, meshes, T, laptop: Object.values(meshes).filter((m: any) => /laptop|ноут/i.test(m.name + (m.material && m.material.name))), lapOn: true };
 }
 
 function azHide(n: any) { if (n.az) n.az.g.visible = false; }
@@ -123,9 +132,10 @@ function azPose(n: any, i: number, J: any, bob: number) {
   const yOff = floorYOff(n.f), cx = camera.position.x - n.x, cy = camera.position.y - n.z - yOff, cz = camera.position.z + n.y;
   if (cx * cx + cy * cy + cz * cz > AZ_FAR2) { A.g.visible = false; n.azHid = false; return false; }
   if (!n.azHid) { n.azHid = true; for (const p of PARTS1) setP(p, i, ZERO); for (const p of PARTS2) { setP(p, i * 2, ZERO); setP(p, i * 2 + 1, ZERO); } }
-  const k = n.k, s = k * 1.78 / AZ.h;
+  const k = n.k, T = A.T, s = (n.h || 1.75) / T.h;
   const g = A.g; g.visible = true;
-  g.position.set(n.x + J.hipX * k, n.z + yOff + bob * k + (J.hipY - 0.92) * k, -n.y);
+  const drop = (0.92 - J.hipY) / 0.92 * T.hip * s;      // сел: таз опускается на сиденье
+  g.position.set(n.x + J.hipX * k, n.z + yOff + bob * k - drop, -n.y);
   g.rotation.set(0, n.a + Math.PI / 2, 0);
   g.scale.setScalar(s);
   for (const x of A.drv) { const r = x.I.drive ? x.I.drive.get(J, n) : [0, 0, 0]; azSetBone(x.I, x.bone, r[0], r[1], r[2]); }
@@ -134,11 +144,21 @@ function azPose(n: any, i: number, J: any, bob: number) {
   return true;
 }
 
-// кому достаётся Азамат: студенты-парни, пока не набрали AZ.max
+// кто кем выглядит: студенты и студентки — из набора, преподаватели, директор, айтишник — «взрослые»
+function azKind(n: any): string | null {
+  const m = n.g !== 'f';
+  if (n.role === 'student' || n.role === 'applicant' || n.role === 'gym') return m ? 'stuM' : 'stuF';
+  if (n.role === 'teacher' || n.role === 'dean' || n.role === 'inspector' || n.role === 'it') return m ? 'tchM' : 'tchF';
+  return null;
+}
 function azMaybe(n: any) {
   n.az = null;
-  if (n.g !== 'm' || n.role !== 'student' || AZ.list.length >= AZ.max) return;
-  n.az = azMake(n); n.azHid = false; AZ.list.push(n);
+  const kind = azKind(n); if (!kind || AZ.list.length >= AZ.max) return;
+  const ids = AZ_CAST[kind].filter((id: string) => AZ.tpl[id]); if (!ids.length) { n.az = undefined; return; }   // ещё грузится
+  const pickI = Math.floor(Math.abs(Math.sin((n.id || 0) * 9.37 + (n.seed || 0)) * 1e4)) % ids.length;
+  if (ids.length < AZ_CAST[kind].length && AZ.loadingSince == null) AZ.loadingSince = performance.now();
+  if (ids.length < AZ_CAST[kind].length && performance.now() - AZ.loadingSince < 15000) { n.az = undefined; return; }   // ждём весь набор, чтобы не было одинаковых
+  n.az = azMake(n, AZ.tpl[ids[pickI]]); n.azHid = false; AZ.list.push(n);
 }
 
 const _evInitAz = evInit; evInit = () => { _evInitAz(); azLoad(); };

@@ -1,6 +1,6 @@
 // Сборка 3D-модели в один HTML-файл: TypeScript (уже скомпилированный tsc в build/) + шаблон + данные.
 // Результат: ../campus/viewer/index.html (Django) и build/korpus-artifact.html (артефакт claude.ai).
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,7 +21,6 @@ const put = (key, value) => {
 put('/*__APP__*/', app);
 put('__SIM__', read('data/sim.json').replace(/<\//g, '<\\/'));
 put('__DATA__', read('data/data.b64').trim());
-put('__AZAMAT__', existsSync(join(root, 'data/azamat.glb')) ? readFileSync(join(root, 'data/azamat.glb')).toString('base64') : '');
 
 writeFileSync(join(root, '../campus/viewer/index.html'), html);
 
@@ -33,3 +32,9 @@ const art = html
   .replace('</body>\n</html>\n', '');
 writeFileSync(join(root, 'build/korpus-artifact.html'), art);
 console.log(`index.html: ${(html.length / 1e6).toFixed(2)} МБ, модулей: ${ORDER.length}`);
+
+// Персонажи (GLB из Blender) лежат отдельными файлами: в Django — static/campus/npc, у артефакта — build/npc
+for (const out of ['../campus/static/campus/npc', 'build/npc']) {
+  mkdirSync(join(root, out), { recursive: true });
+  for (const f of readdirSync(join(root, 'data/npc'))) if (f.endsWith('.glb')) copyFileSync(join(root, 'data/npc', f), join(root, out, f));
+}
