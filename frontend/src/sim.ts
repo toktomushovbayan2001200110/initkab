@@ -1,6 +1,6 @@
 // ================= ЖИВОЙ КОРПУС: студенты, преподаватели, айтишник =================
 // Координаты симуляции: x,y — план (м), z — высота; мир three.js: (x, z, -y)
-const SIM = JSON.parse(document.getElementById('simdata').textContent);
+const SIM: SimData = JSON.parse(document.getElementById('simdata').textContent);
 const FZ = [0, 3, 6, -0.58];          // 3 = двор (улица), уровень земли
 const OUTZ = -0.58;
 const SR = SIM.R, SX0 = SIM.X0, SY0 = SIM.Y0, SNX = SIM.NX, SNY = SIM.NY;
@@ -43,7 +43,7 @@ function nearestPass(f, x, y, maxR = 18) {
 }
 // A* (8-связность, без срезания углов)
 const AN = SNX * SNY;
-const gS = new Float32Array(AN), came = new Int32Array(AN), stamp = new Uint32Array(AN), closed = new Uint32Array(AN);
+const gS = new Float32Array(AN), came = new Int32Array(AN), stamp = new Uint32Array(AN), closedA = new Uint32Array(AN);
 let gen = 1;
 const heap = { a: [], f: [], push(n, s) { const a = this.a, f = this.f; a.push(n); f.push(s); let i = a.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (f[p] <= f[i]) break;[a[p], a[i]] = [a[i], a[p]];[f[p], f[i]] = [f[i], f[p]]; i = p; } },
   pop() { const a = this.a, f = this.f; const top = a[0]; const la = a.pop(), lf = f.pop(); if (a.length) { a[0] = la; f[0] = lf; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < a.length && f[l] < f[m]) m = l; if (r < a.length && f[r] < f[m]) m = r; if (m === i) break;[a[m], a[i]] = [a[i], a[m]];[f[m], f[i]] = [f[i], f[m]]; i = m; } } return top; },
@@ -57,7 +57,7 @@ function astar(f, s, g) {
   const h = (i, j) => { const dx = Math.abs(i - g[0]), dy = Math.abs(j - g[1]); return (dx + dy) + (1.4142 - 2) * Math.min(dx, dy); };
   heap.push(si, h(s[0], s[1])); let it = 0;
   while (heap.a.length && it++ < 250000) {
-    const cur = heap.pop(); if (closed[cur] === gen) continue; closed[cur] = gen;
+    const cur = heap.pop(); if (closedA[cur] === gen) continue; closedA[cur] = gen;
     if (cur === gi) break;
     const ci = cur % SNX, cj = (cur / SNX) | 0;
     for (const [dx, dy, c] of DIRS) {
@@ -201,7 +201,7 @@ const teachRooms = [...PC_ROOMS, ...CLASS_ROOMS];
 const overlaps = (p, q) => p !== q && PAIRS[p][0] < PAIRS[q][1] && PAIRS[q][0] < PAIRS[p][1];
 const SCHED = PAIRS.map(() => ({}));    // SCHED[p][groupId] = {room, subj, teacher, lecture}
 for (let p = 0; p < PAIRS.length; p++) {
-  const busy = new Set(); for (let q = 0; q < p; q++) if (overlaps(p, q)) Object.values(SCHED[q]).forEach(s => busy.add(s.room));
+  const busy = new Set(); for (let q = 0; q < p; q++) if (overlaps(p, q)) Object.values(SCHED[q]).forEach((s: any) => busy.add(s.room));
   const free = shuffle(teachRooms.filter(r => r.name !== 'Лекционная аудитория' && !busy.has(r.id)));
   const lect = CLASS_ROOMS.find(r => r.name === 'Лекционная аудитория');
   const act = shuffle(GROUPS.filter(g => g.shift === PSH[p] && p >= g.first && p <= g.last && !(p === g.first + 1 && g.id % 5 === 0 && g.last > g.first + 1)));
@@ -254,8 +254,8 @@ const say = (n, list, dur = 3.2) => { if (typeof sayHook === 'function') list = 
 // ---------- геометрия человечков (instancing) ----------
 const BGU = THREE.BufferGeometryUtils;
 function cap(r, L) { const g = new THREE.CapsuleGeometry(r, Math.max(0.001, L - 2 * r), 3, 8); g.translate(0, -L / 2, 0); return g; }
-const PART = {};
-function mkPart(name, geo, n, opts = {}) {
+const PART: any = {};
+function mkPart(name, geo, n, opts: any = {}) {
   const mat = opts.mat || new THREE.MeshStandardMaterial({ roughness: opts.rough ?? 0.8, metalness: 0 });
   const m = new THREE.InstancedMesh(geo, mat, n);
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false;
@@ -266,7 +266,7 @@ function mkPart(name, geo, n, opts = {}) {
 const people = new THREE.Group(); scene.add(people);
 
 // ---------- NPC ----------
-const NPCS = [];
+const NPCS: NPC[] = [];
 const SKIN = [0xe9c6a1, 0xdcb08a, 0xcf9e76, 0xf0d3b5, 0xc28c64, 0xe2b996, 0xd6a47e].map(c => new THREE.Color(c));
 const HAIR = [0x1b1512, 0x221a15, 0x2b1d14, 0x3a2717, 0x15100d, 0x4a3221, 0x6b4a2e, 0x1a1a1a].map(c => new THREE.Color(c));
 const HAIR_DYED = [0x8a5a35, 0xa36b3d, 0xc9a26b, 0x5a2a2a].map(c => new THREE.Color(c));
@@ -277,9 +277,9 @@ const BAGS = [0x1d1d1d, 0x2c3e50, 0x7f1d1d, 0x3d5a40, 0x5b4636, 0x23395d].map(c 
 const SUIT = [0x1f2733, 0x2a2a2e, 0x3b3f46, 0x4a3b30, 0x23314a].map(c => new THREE.Color(c));
 
 let NID = 0;
-function makeNPC(role, opts = {}) {
+function makeNPC(role: Role, opts: any = {}): NPC {
   const g = opts.gender || (chance(0.5) ? 'm' : 'f');
-  const n = {
+  const n: NPC = {
     id: NID++, role, g, spawned: false, f: 0, x: 0, y: 0, z: 0, a: 0,
     h: g === 'm' ? rr(1.66, 1.88) : rr(1.55, 1.72), build: rr(0.9, 1.12),
     tasks: [], path: null, pi: 0, speed: pick([rr(0.85, 1.0), rr(1.0, 1.2), rr(1.05, 1.25), rr(1.25, 1.45)]), walk: 0, phase: rr(0, 6.28), pose: 'stand', poseT: 0, sub: 'listen', subT: 0,
@@ -350,7 +350,7 @@ function buildScreens() {
   people.add(screenMesh);
   updateScreens(true);
 }
-function updateScreens(all) {
+function updateScreens(all?) {
   if (!screenMesh) return;
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3();
   PCS.forEach((p, i) => {
@@ -371,7 +371,7 @@ function pcOn(p, n) {
   p.user = n; if (p.err) { p.tile = 5; return; }
   if (p.tile === 0 || p.tile === 1) { p.tile = 1; p.bootT = simT + rr(0.4, 0.9); }
 }
-function pcTick() {
+function pcTick__base() {
   PCS.forEach(p => {
     if (p.err) { p.tile = 5; return; }
     if (p.tile === 1 && simT >= p.bootT) p.tile = 2;
@@ -389,9 +389,9 @@ function pcTick() {
 
 // ---------- задачи ----------
 const pathQ = [];
-function goTo(n, tgt, act, after, pace) { n.tasks.push({ t: 'go', tgt, act, after, pace: pace || 1 }); }
+function goTo(n, tgt, act, after?, pace?) { n.tasks.push({ t: 'go', tgt, act, after, pace: pace || 1 }); }
 const aph = dt => Math.min(dt, ANIM_DT * 1.6);   // шаг анимации ног не быстрее реального
-function startGo(n, task) {
+function startGo__base(n, task) {
   n.path = null; n.waitPath = true; n.act = task.act || n.act;
   pathQ.push({ n, task });
 }
@@ -460,7 +460,7 @@ function finishOutdoor() {
     if (ok) YARD.push([wx(i), wy(j)]);
   }
 }
-function yardSpot(nearX, nearY, rad) {
+function yardSpot__base(nearX?, nearY?, rad?) {
   for (let t = 0; t < 40; t++) { const p = pick(YARD); if (nearX == null || Math.hypot(p[0] - nearX, p[1] - nearY) < rad) return { f: 3, x: p[0] + rr(-0.15, 0.15), y: p[1] + rr(-0.15, 0.15) }; }
   const p = pick(YARD); return { f: 3, x: p[0], y: p[1] };
 }
@@ -471,7 +471,7 @@ function populate() {
   const kafSeats = KAF.map(r => seatsIn(r.id).filter(s => s.office));
   for (let i = 0; i < 14; i++) {
     const KT = KGU && Array.isArray(KGU.teachers) ? KGU.teachers[i] : null;
-    const t = makeNPC('teacher', { gender: KT && KT.g ? KT.g : (chance(0.55) ? 'f' : 'm') });
+    const t: any = makeNPC('teacher', { gender: KT && KT.g ? KT.g : (chance(0.55) ? 'f' : 'm') });
     t.patr = t.g === 'm' ? pick(PATR_M) : pick(PATR_F);
     t.kaf = KAF[i % KAF.length]; t.age = Math.floor(rr(28, 63)); t.speed = rr(0.95, 1.25) - (t.age > 55 ? 0.15 : 0);
     t.title = pick(['ст. преподаватель', 'доцент', 'преподаватель', 'профессор', 'к.т.н., доцент']);
@@ -480,11 +480,11 @@ function populate() {
   // назначение преподавателей на пары (без наложений по времени)
   for (let p = 0; p < PAIRS.length; p++) {
     const byRoom = {};
-    for (const [gid, s] of Object.entries(SCHED[p])) { (byRoom[s.room] = byRoom[s.room] || []).push(+gid); }
+    for (const [gid, s] of Object.entries(SCHED[p])) { (byRoom[(s as any).room] = byRoom[(s as any).room] || []).push(+gid); }
     const free = shuffle(TEACHERS.filter(t => !Object.keys(t.lessons || {}).some(q => overlaps(p, +q))));
     for (const [rid, gids] of Object.entries(byRoom)) {
       const t = free.pop(); if (!t) break;
-      gids.forEach(g => SCHED[p][g].teacher = t.id);
+      (gids as any).forEach(g => SCHED[p][g].teacher = t.id);
       (t.lessons = t.lessons || {})[p] = { room: +rid, subj: SCHED[p][gids[0]].subj, groups: gids };
     }
   }
@@ -493,7 +493,7 @@ function populate() {
   GROUPS.forEach(g => {
     for (let i = 0; i < g.size; i++) {
       const R0 = g.roster ? g.roster[i] : null;
-      const s = makeNPC('student', R0 && R0.g ? { gender: R0.g } : {}); s.group = g; if (R0) { s.name = kClean(R0.first) || s.name; s.surname = kClean(R0.last) || s.surname; s.dbId = R0.id; if (R0.arch) s.archDb = R0.arch; } s.age = 16 + g.course + Math.floor(rr(0, 3));
+      const s: any = makeNPC('student', R0 && R0.g ? { gender: R0.g } : {}); s.group = g; if (R0) { s.name = kClean(R0.first) || s.name; s.surname = kClean(R0.last) || s.surname; s.dbId = R0.id; if (R0.arch) s.archDb = R0.arch; } s.age = 16 + g.course + Math.floor(rr(0, 3));
       s.arrive = PAIRS[g.first][0] - rr(5, 28) + (s.traits.punctual < 0.2 ? rr(6, 18) : 0);
       s.leave = PAIRS[g.last][1] + rr(0, 6);
       STUDENTS.push(s);
@@ -506,10 +506,10 @@ function populate() {
   DEAN = makeNPC('dean', KD && KD.g ? { gender: KD.g } : {}); DEAN.arrive = 470; DEAN.age = 52; DEAN.patr = DEAN.g === 'm' ? pick(PATR_M) : pick(PATR_F); DEAN.speed = 1.0; if (KD) { if (KD.last) DEAN.surname = kClean(KD.last); if (KD.first) DEAN.name = kClean(KD.first); if (KD.patr) DEAN.patr = kClean(KD.patr); }
   if (KGU && KGU.it) { if (KGU.it.first) IT.name = kClean(KGU.it.first); if (KGU.it.last) IT.surname = kClean(KGU.it.last); }
   const offices = ROOMS.filter(r => r.f === 1 && r.kind === 'office');
-  offices.forEach(r => seatsIn(r.id).filter(s => s.office).slice(0, 1).forEach(seat => { const s = makeNPC('staff'); s.home = seat; s.arrive = rr(470, 520); s.age = Math.floor(rr(25, 60)); STAFF.push(s); }));
-  const guard = makeNPC('guard', { gender: 'm' }); guard.arrive = 400; guard.age = 58; guard.cTop = new THREE.Color(0x26323f); guard.speed = 0.9; STAFF.push(guard);
+  offices.forEach(r => seatsIn(r.id).filter(s => s.office).slice(0, 1).forEach(seat => { const s: any = makeNPC('staff'); s.home = seat; s.arrive = rr(470, 520); s.age = Math.floor(rr(25, 60)); STAFF.push(s); }));
+  const guard: any = makeNPC('guard', { gender: 'm' }); guard.arrive = 400; guard.age = 58; guard.cTop = new THREE.Color(0x26323f); guard.speed = 0.9; STAFF.push(guard);
   const gym = ROOMS.find(r => r.kind === 'gym');
-  if (gym) for (let i = 0; i < 4; i++) { const s = makeNPC('gym'); s.gym = gym; s.arrive = rr(500, 900); s.age = Math.floor(rr(18, 24)); s.cTop = pick(TOPS); STAFF.push(s); }
+  if (gym) for (let i = 0; i < 4; i++) { const s: any = makeNPC('gym'); s.gym = gym; s.arrive = rr(500, 900); s.age = Math.floor(rr(18, 24)); s.cTop = pick(TOPS); STAFF.push(s); }
 }
 
 // ---------- приход и уход через ворота двора ----------
@@ -523,13 +523,13 @@ function spawn(n) {
   n.tasks.push({ t: 'step', x: g.x, y: g.y, f: 3, act });
   n.bagOn = true;
 }
-function leave(n, why) {
+function leave(n, why?) {
   releaseSeat(n); leaveConv(n);
   const g = pickGate();
   goTo(n, { f: 3, x: g.x, y: g.y }, why || 'идёт домой', m => { m.tasks.push({ t: 'out', pts: g.pts.map(p => [p[0] + rr(-0.4, 0.4), p[1] + rr(-0.4, 0.4)]), k: 0 }); }, n.role === 'student' && simT > 1060 ? 0.8 : 1);
 }
 function releaseSeat(n) { if (n.seat) { if (n.seat.occ === n) n.seat.occ = null; if (n.seat.pc >= 0 && PCS[n.seat.pc].user === n) PCS[n.seat.pc].user = null; n.seat = null; } }
-function takeSeat(n, seat, act, opts = {}) {
+function takeSeat(n, seat, act, opts: any = {}) {
   releaseSeat(n); seat.occ = n; n.seat = seat;
   const p = nearestPass(seat.f, seat.p[0] - Math.cos(seat.a) * 0.15, seat.p[1] - Math.sin(seat.a) * 0.15, 10);
   const app = p ? { f: seat.f, x: wx(p[0]), y: wy(p[1]) } : { f: seat.f, x: seat.p[0], y: seat.p[1] };
@@ -543,7 +543,7 @@ function freeSeat(roomId, filter = s => !s.office) {
 // ---------- разговоры ----------
 const CONVS = [];
 function makeConv(f, x, y, topic, dur) { const c = { f, x, y, topic, members: [], t: 0, next: 0, dur: dur || rr(6, 18) }; CONVS.push(c); return c; }
-function joinConv(n, c, act) {
+function joinConv(n, c, act?) {
   if (c.members.length >= 6) return false;
   c.members.push(n); n.conv = c;
   const ang = rnd() * Math.PI * 2; const R = 0.5 + c.members.length * 0.04;
@@ -553,7 +553,7 @@ function joinConv(n, c, act) {
   return true;
 }
 function leaveConv(n) { const c = n.conv; if (!c) return; c.members = c.members.filter(m => m !== n); n.conv = null; if (!c.members.length) CONVS.splice(CONVS.indexOf(c), 1); }
-function convTick(dt) {
+function convTick__base(dt) {
   for (const c of CONVS) {
     const here = c.members.filter(m => m.tasks[0] && m.tasks[0].t === 'chat');
     if (here.length < 2) continue;
@@ -571,8 +571,8 @@ function convTick(dt) {
 }
 
 // ---------- мозг ----------
-function lessonFor(n, p) { return p >= 0 && n.group ? SCHED[p][n.group.id] : null; }
-function decide(n) {
+function lessonFor__base(n, p) { return p >= 0 && n.group ? SCHED[p][n.group.id] : null; }
+function decide__base(n) {
   const t = simT, sh = n.group ? n.group.shift : null, p = pairAt(t, sh), np = nextPair(t, sh);
   if (n.role === 'student') return decideStudent(n, t, p, np);
   if (n.role === 'teacher') return decideTeacher(n, t);
@@ -582,7 +582,7 @@ function decide(n) {
 }
 const daylight = () => simT > SUN.rise + 20 && simT < SUN.set + 25 && !WX.bad;
 // погулять / посидеть во дворе с друзьями
-function yardHang(n, dur) {
+function yardHang__base(n, dur) {
   const friends = [...n.friends.entries()].filter(([, v]) => v > 0.3).map(([id]) => NPCS[id]);
   const conv = CONVS.find(c => c.f === 3 && c.members.length < 6 && c.members.some(m => friends.includes(m) || m.group === n.group));
   if (conv && joinConv(n, conv)) return true;
@@ -590,7 +590,7 @@ function yardHang(n, dur) {
   const spot = yardSpot(n.x, n.y, 25); if (!spot) return false;
   const c = makeConv(3, spot.x, spot.y, 'yard', dur); joinConv(n, c); return true;
 }
-function decideStudent(n, t, p, np) {
+function decideStudent__base(n, t, p, np) {
   if (t >= n.leave) {
     // после пар: «жай-жай» — постоять с друзьями во дворе, потом домой
     if (!n.hung && t < 1170 && chance((0.25 + n.traits.social * 0.55) * (WX.bad ? 0.35 : 1))) { n.hung = true; if (yardHang(n, t > 1060 ? rr(15, 55) : rr(8, 25))) return; }
@@ -691,7 +691,7 @@ function decideStaff(n, t) {
 }
 
 // ---------- исполнение задач ----------
-function runTask(n, dt) {
+function runTask__base(n, dt) {
   const T = n.tasks[0];
   if (!T || T.t !== 'wait') n.hidden = false;
   if (!T) { decide(n); return; }
@@ -750,7 +750,7 @@ function runTask(n, dt) {
     default: n.tasks.shift();
   }
 }
-function seatedBehaviour(n, T, dt) {
+function seatedBehaviour__base(n, T, dt) {
   if (n.subNext == null || simT >= n.subNext) {
     const pc = n.seat && n.seat.pc >= 0;
     const lesson = T.kind === 'lesson';
@@ -771,7 +771,7 @@ function seatedBehaviour(n, T, dt) {
   }
   if (n.seat && n.seat.pc >= 0) { const P = PCS[n.seat.pc]; if (P.user !== n) pcOn(P, n); }
 }
-function teachBehaviour(n, T, dt) {
+function teachBehaviour__base(n, T, dt) {
   const sp = T.spot; n.act = `ведёт пару: ${T.lesson.subj}`;
   if (simT >= T.until) { n.tasks.shift(); n.pose = 'stand'; say(n, pick(['На сегодня всё, до свидания!', 'Домашнее задание в чате группы', 'Свободны!'])); return; }
   if (T.early && simT < PAIRS[T.p][0]) { n.sub = 'idle'; n.pose = 'stand'; n.walk = 0; return; }
@@ -819,12 +819,12 @@ function separate(dt) {
 }
 
 // ---------- день ----------
-function resetDay() {
+function resetDay__base() {
   NPCS.forEach(n => { n.spawned = false; n.tasks.length = 0; n.path = null; n.doneToday = false; n.conv = null; n.seat = null; n.skip = null; n.say = null; n.hung = false; n.backAt = null; n.hidden = false; n.lateMark = null; for (const k in n.st) n.st[k] = 0; n.needs.energy = rr(0.6, 1); n.needs.hunger = rr(0.1, 0.4); n.needs.bladder = rr(0, 0.3); });
   SEATS.forEach(s => s.occ = null); BENCH_SEATS.forEach(s => s.occ = null); PCS.forEach(p => { p.user = null; p.tile = 0; p.err = false; p.fixer = null; p.offAt = null; }); CONVS.length = 0; pathQ.length = 0;
 }
 function newDay() { simDay++; simDow = (simDow + 1) % 7; simT -= 1440; resetDay(); }
-function simTick(dtMin) {
+function simTick__base(dtMin) {
   simT += dtMin;
   if (simT >= 1440) newDay();
   const hol = holiday();
@@ -884,7 +884,7 @@ function simUI() {
   const ban = document.createElement('div'); ban.id = 'liveBan'; host.appendChild(ban);
 }
 function markSpeed() { document.querySelectorAll('#sSpeed button').forEach(x => x.classList.toggle('on', liveMode ? x.dataset.s === 'live' : x.dataset.s === String(simSpeed))); }
-function prewarm(target) {
+function prewarm__base(target) {
   resetDay(); ANIM_DT = 1;
   if (target > 400 && target < 1300) { simT = 400; while (simT < target) simTick(Math.min(0.1, target - simT + 1e-6)); }
   else simT = target;
@@ -899,7 +899,7 @@ function startMorning() {
   liveMode = false; if (holiday()) simDow = 1;
   resetDay(); simT = 7 * 60 + 20; simSpeed = 5; markSpeed();
 }
-function jumpTo(fn) {
+function jumpTo__base(fn) {
   const target = fn(); if (target == null) return;
   liveMode = false; if (simSpeed === 0) simSpeed = 5; markSpeed();
   ANIM_DT = 1; let steps = 0; while (simT < target && steps++ < 6000) { simTick(0.05); }
@@ -909,7 +909,7 @@ function selectNPC(n) {
   if (!n) { c.style.display = 'none'; return; }
   c.style.display = 'block';
 }
-function cardHTML(n) {
+function cardHTML__base(n) {
   const role = { student: n.g === 'm' ? 'Студент' : 'Студентка', teacher: n.title || 'Преподаватель', it: 'Системный администратор ИНИТ', dean: 'Директор ИНИТ', staff: 'Сотрудник', guard: 'Вахтёр', gym: 'Студент (спортзал)' }[n.role] || ROLE_X[n.role] || '';
   const full = n.role === 'student' || n.role === 'gym' ? `${n.name} ${n.surname}` : `${n.surname} ${n.name} ${n.patr || ''}`;
   const sub = n.role === 'student' ? `группа ${n.group.name}, ${n.group.course} курс, ${n.age} лет` : (n.role === 'teacher' ? `${n.kaf.num ? 'каб. ' + n.kaf.num : ''}, ${n.age} лет` : (n.role === 'it' ? 'кабинет 314' : `${n.age || ''} лет`));
@@ -935,7 +935,7 @@ function shiftStatus(sh) {
   const firstOfShift = PSH.indexOf(sh) === np;
   return firstOfShift ? `начало в ${hhmm(PAIRS[np][0])}` : `перемена, ${PAIR_NAMES[np]} в ${hhmm(PAIRS[np][0])}`;
 }
-function updateUI() {
+function updateUI__base() {
   document.getElementById('sClock').textContent = hhmm(simT);
   document.getElementById('sDay').innerHTML = `${DAYS[simDow]} · ${weatherLabel(simT)}${liveMode ? ' · <span class="live">● вживую, Бишкек</span>' : ''}`;
   let st;
@@ -990,14 +990,14 @@ async function initSim() {
   goLive();
 }
 let lastSim = performance.now(), syncT = 0;
-function simFrame() {
+function simFrame__base() {
   const now = performance.now(); let dt = Math.min(0.1, (now - lastSim) / 1000); lastSim = now;
   if (liveMode && (syncT += dt) > 5) { syncT = 0; const b = bishkekNow(); const d = b.min - simT; if (b.dow !== simDow || d < -1 || d > 2) goLive(); }
   const dtMin = dt * simSpeed / 60;
   if (simSpeed > 0) { const steps = Math.max(1, Math.ceil(dtMin / 0.05)); ANIM_DT = dt / steps; for (let s = 0; s < steps; s++) simTick(dtMin / steps); }
   if (simSpeed > 0) separate(dt * Math.min(simSpeed, 5));
   for (let i = 0; i < NPCS.length; i++) { const n = NPCS[i]; n.subT += dt; poseNPC(n, i, npcVisible(n)); }
-  Object.values(PART).forEach(m => m.instanceMatrix.needsUpdate = true);
+  Object.values(PART).forEach((m: any) => m.instanceMatrix.needsUpdate = true);
   updateScreens();
   worldFrame(dt);
   if (followN && followN.spawned) {

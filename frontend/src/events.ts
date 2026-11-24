@@ -1,5 +1,5 @@
 // ================= v4: события, праздники, режим директора =================
-const EV = { cur: null, lastKey: null, sched: [], period: 'auto', weather: 'auto', crowd: 1, announce: null, names: {}, prevT: null };
+const EV: any = { cur: null, lastKey: null, sched: [], period: 'auto', weather: 'auto', crowd: 1, announce: null, names: {}, prevT: null };
 const EV_DEF = {
   alarm: { name: 'Пожарная тревога', icon: '🚨', dur: 22 },
   power: { name: 'Отключение света', icon: '💡', dur: 25 },
@@ -85,7 +85,7 @@ function interrupt(n) {
 }
 function spotNear(f, x, y, r = 8) { const q = nearestPass(f, x, y, Math.ceil(r / SR)); return q ? { f, x: wx(q[0]) + rr(-0.05, 0.05), y: wy(q[1]) + rr(-0.05, 0.05) } : null; }
 function hold(n, o) { n.tasks.push({ t: 'hold', ...o }); }
-const EXT_TASK = {};
+const EXT_TASK: any = {};
 EXT_TASK.hold = (n, T, dt) => {
   if (!T.st) { T.st = true; n.sub = T.sub || 'idle'; n.subT = 0; if (T.act) n.act = T.act; n.pose = 'stand'; }
   n.walk = Math.max(0, n.walk - dt * 5);
@@ -110,7 +110,7 @@ function blockOff(key) { const s = BLOCKS[key]; if (!s) return; const G = GRID[3
 
 // ---------- новости (бегущая строка) ----------
 const NEWS = []; let newsEl = null;
-function news(text, hot) {
+function news(text, hot?) {
   NEWS.push({ text: `${hhmm(simT)} ${text}`, hot }); if (NEWS.length > 14) NEWS.shift();
   if (!newsEl || PREWARM) return; renderNews();
 }
@@ -133,10 +133,10 @@ let PREWARM = false;
 const INSP = [], KIDS = [], WORKERS = [], APPL = []; let DED = null, SNOWM = null;
 const COUPLES = [];
 function evPopulate() {
-  for (let i = 0; i < 3; i++) { const n = makeNPC('inspector', { gender: i === 1 ? 'f' : 'm' }); n.cTop = pick(SUIT); n.cShirt = new THREE.Color(0xf2f2f0); n.cPants = n.cTop; n.patr = n.g === 'm' ? pick(PATR_M) : pick(PATR_F); n.age = Math.floor(rr(40, 60)); n.speed = 0.9; n.bag = false; n.glasses = chance(0.6); INSP.push(n); }
-  for (let i = 0; i < 14; i++) { const n = makeNPC('kid'); n.h = n.g === 'm' ? rr(1.4, 1.62) : rr(1.38, 1.58); n.k = n.h / 1.75; n.bag = true; n.age = Math.floor(rr(15, 17)); n.speed = rr(1.05, 1.3); KIDS.push(n); }
-  for (let i = 0; i < 4; i++) { const n = makeNPC('worker', { gender: 'm' }); n.cTop = new THREE.Color(0xe86a1c); n.cPants = new THREE.Color(0x2a3140); n.bag = false; n.age = Math.floor(rr(25, 55)); n.speed = 0.95; WORKERS.push(n); }
-  for (let i = 0; i < 6; i++) { const n = makeNPC('applicant'); n.age = 17; n.bag = chance(0.5); APPL.push(n); }
+  for (let i = 0; i < 3; i++) { const n: any = makeNPC('inspector', { gender: i === 1 ? 'f' : 'm' }); n.cTop = pick(SUIT); n.cShirt = new THREE.Color(0xf2f2f0); n.cPants = n.cTop; n.patr = n.g === 'm' ? pick(PATR_M) : pick(PATR_F); n.age = Math.floor(rr(40, 60)); n.speed = 0.9; n.bag = false; n.glasses = chance(0.6); INSP.push(n); }
+  for (let i = 0; i < 14; i++) { const n: any = makeNPC('kid'); n.h = n.g === 'm' ? rr(1.4, 1.62) : rr(1.38, 1.58); n.k = n.h / 1.75; n.bag = true; n.age = Math.floor(rr(15, 17)); n.speed = rr(1.05, 1.3); KIDS.push(n); }
+  for (let i = 0; i < 4; i++) { const n: any = makeNPC('worker', { gender: 'm' }); n.cTop = new THREE.Color(0xe86a1c); n.cPants = new THREE.Color(0x2a3140); n.bag = false; n.age = Math.floor(rr(25, 55)); n.speed = 0.95; WORKERS.push(n); }
+  for (let i = 0; i < 6; i++) { const n: any = makeNPC('applicant'); n.age = 17; n.bag = chance(0.5); APPL.push(n); }
   DED = makeNPC('ded', { gender: 'm' }); DED.name = 'Дед'; DED.surname = 'Мороз'; DED.cTop = new THREE.Color(0xb3141b); DED.cPants = new THREE.Color(0xb3141b); DED.cShoes = new THREE.Color(0x111111); DED.bag = true; DED.cBag = new THREE.Color(0xc0262c); DED.hat = 'dm'; DED.beard = true; DED.speed = 0.75; DED.h = 1.84; DED.k = DED.h / 1.75; DED.build = 1.25; DED.hair = 'short'; DED.cHair = new THREE.Color(0xf2f2f2);
   SNOWM = makeNPC('snow', { gender: 'f' }); SNOWM.name = 'Снегурочка'; SNOWM.surname = ''; SNOWM.cTop = new THREE.Color(0x7fc1ec); SNOWM.cPants = new THREE.Color(0x7fc1ec); SNOWM.skirt = true; SNOWM.hair = 'pony'; SNOWM.cHair = new THREE.Color(0xd9b26a); SNOWM.bag = false; SNOWM.hat = 'snowc'; SNOWM.speed = 0.85;
   [...INSP, ...KIDS, ...WORKERS, ...APPL, DED, SNOWM].forEach(n => { n.arrive = Infinity; n.special = true; });
@@ -204,8 +204,8 @@ function canSpawn(n, hol) {
 }
 
 // ---------- реквизит праздников во дворе ----------
-const PROPS = {}; const PLAZA = { x: 5.5, y: -1.5 };
-const STAGE = {}; let propsBuilt = false;
+const PROPS: any = {}; const PLAZA = { x: 5.5, y: -1.5 };
+const STAGE: any = {}; let propsBuilt = false;
 const Mesh = (g, m) => { const o = new THREE.Mesh(g, m); o.castShadow = true; o.receiveShadow = true; return o; };
 function canvasT(w, h, fn) { const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; }
 function bannerTex(text, sub, bg, fg) { return canvasT(1024, 256, (g, w, h) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,.12)'; for (let i = 0; i < 40; i++) g.fillRect(i * 28, 0, 3, h); g.fillStyle = fg; g.textAlign = 'center'; g.font = '600 92px "Golos Text", sans-serif'; g.fillText(text, w / 2, 130); g.font = '500 44px "Golos Text", sans-serif'; g.fillText(sub, w / 2, 205); }); }
@@ -274,7 +274,7 @@ function propsFor(P) {
   if (P === 'nooruz') { blockOn('yurt', PROPS.yurtP.x, PROPS.yurtP.y, 2.95); blockOn('kazan', PROPS.kazanP.x, PROPS.kazanP.y, 0.8); } else { blockOff('yurt'); blockOff('kazan'); }
   if (P === 'newyear') blockOn('tree', PROPS.treeP.x, PROPS.treeP.y, 3.1); else blockOff('tree');
   const bt = { nooruz: ['Нооруз майрамы', 'Кут-береке, ынтымак! 🌸', '#2e7d4f', '#fff'], grad: ['Выпускной 2027', 'ИНИТ · КГУ им. И. Арабаева 🎓', '#1c2a52', '#ffd24a'], newyear: ['С Новым годом!', 'ИНИТ поздравляет 🎄', '#8c1a2a', '#fff'] }[P];
-  if (bt && STAGE.banner) { STAGE.banner.material.map = bannerTex(...bt); STAGE.banner.material.needsUpdate = true; }
+  if (bt && STAGE.banner) { STAGE.banner.material.map = bannerTex(...(bt as [any, any, any, any])); STAGE.banner.material.needsUpdate = true; }
 }
 let propT = 0;
 function propsFrame(dt) {
@@ -285,8 +285,8 @@ function propsFrame(dt) {
 }
 
 // ---------- события ----------
-const EV_START = {}, EV_STOP = {}, EV_DEC = {};
-function startEvent(type, opt = {}) {
+const EV_START: any = {}, EV_STOP: any = {}, EV_DEC: any = {};
+function startEvent(type, opt: any = {}) {
   if (!EV_DEF[type]) return;
   if (EV.cur) stopEvent(true);
   const D = EV_DEF[type]; const t0 = simT - (opt.elapsed || 0);
@@ -296,7 +296,7 @@ function startEvent(type, opt = {}) {
   updAdmin();
   if (type === 'alarm') sndSiren();
 }
-function stopEvent(silent) {
+function stopEvent(silent?) {
   const E = EV.cur; if (!E) return; EV.cur = null;
   (EV_STOP[E.type] || (() => { }))(E, silent);
   updAdmin();
@@ -362,11 +362,11 @@ function tourDecide(n) {
 }
 EV_START.inspect = E => {
   const lead = INSP[0]; const t = simT;
-  const busy = []; for (let p = 0; p < PAIRS.length; p++) if (t >= PAIRS[p][0] - 10 && t < PAIRS[p][1]) Object.values(SCHED[p]).forEach(s => { if (!busy.includes(s.room)) busy.push(s.room); });
+  const busy = []; for (let p = 0; p < PAIRS.length; p++) if (t >= PAIRS[p][0] - 10 && t < PAIRS[p][1]) Object.values(SCHED[p]).forEach((s: any) => { if (!busy.includes(s.room)) busy.push(s.room); });
   const rooms = shuffle(busy.map(id => roomById(id)).filter(r => r && r.f === 2)).slice(0, 4);
   if (rooms.length < 3) shuffle([...PC_ROOMS, ...CLASS_ROOMS]).forEach(r => { if (rooms.length < 4 && !rooms.includes(r)) rooms.push(r); });
   const g = GATES[0];
-  const wps = [{ f: 3, x: PLAZA.x + 3, y: PLAZA.y + 1, stay: 1, act: 'комиссия входит во двор', stayAct: 'осматривает двор', say: 'Так, посмотрим корпус', topic: 'inspect' }];
+  const wps: any[] = [{ f: 3, x: PLAZA.x + 3, y: PLAZA.y + 1, stay: 1, act: 'комиссия входит во двор', stayAct: 'осматривает двор', say: 'Так, посмотрим корпус', topic: 'inspect' }];
   rooms.forEach(r => { const s = spotNear(r.f, r.c[0], r.c[1], 6); if (s) wps.push({ ...s, stay: 3, act: `идёт в ${r.num || 'аудиторию'}`, stayAct: `проверяет занятие в ${r.num || 'аудитории'}`, topic: 'inspect', stayAct2: 'проверяет занятие', news: `🕴 Комиссия проверяет аудиторию ${r.num || ''}` }); });
   if (R_DEAN) { const s = spotNear(2, R_DEAN.c[0], R_DEAN.c[1], 6); if (s) wps.push({ ...s, stay: 5, act: 'идёт в дирекцию', stayAct: 'обсуждает итоги проверки с директором', sub: 'talk', topic: 'inspect' }); }
   const members = INSP.slice(1);
@@ -397,7 +397,7 @@ EV_START.hack = E => {
   shuffle(TEACHERS.slice()).slice(0, 3).forEach(t => { t.hackMentor = true; t.leave = E.end; });
   E.data.pizza = E.t0 + 75;
 };
-function busyRooms(t) { const b = new Set(); for (let p = 0; p < PAIRS.length; p++) if (t >= PAIRS[p][0] - 5 && t < PAIRS[p][1]) Object.values(SCHED[p]).forEach(s => b.add(s.room)); return b; }
+function busyRooms(t) { const b = new Set(); for (let p = 0; p < PAIRS.length; p++) if (t >= PAIRS[p][0] - 5 && t < PAIRS[p][1]) Object.values(SCHED[p]).forEach((s: any) => b.add(s.room)); return b; }
 EV_DEC.hack = (n, t, E) => {
   if (n.hackMentor) {
     const ks = Object.keys(n.lessons || {}).map(Number); if (ks.some(k => t >= PAIRS[k][0] - 3 && t < PAIRS[k][1])) return false;
@@ -504,7 +504,7 @@ function evDecide(n) {
 }
 
 // ---------- очередь в буфете ----------
-const QUEUE = { pts: [], list: [], counter: null };
+const QUEUE: any = { pts: [], list: [], counter: null };
 function buildQueue() {
   if (!R_COWORK) return;
   const c = cellsOf(2, R_COWORK.id); let best = null;
@@ -643,7 +643,7 @@ function pcExtra() {
 }
 
 // ---------- звуки ----------
-const SND = { on: false, C: null, master: null, voices: [], noise: null, keyAcc: 0, birdAcc: 0, siren: null, musicAcc: 0 };
+const SND: any = { on: false, C: null, master: null, voices: [], noise: null, keyAcc: 0, birdAcc: 0, siren: null, musicAcc: 0 };
 function sndInit() {
   if (SND.C) return; const C = SND.C = actx = actx || new (window.AudioContext || window.webkitAudioContext)();
   SND.master = C.createGain(); SND.master.gain.value = 0.8; SND.master.connect(C.destination);
@@ -658,7 +658,7 @@ function sndInit() {
 }
 function sndClick(vol) { const C = SND.C, s = C.createBufferSource(); s.buffer = SND.noise; const hp = C.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500 + Math.random() * 2000; const g = C.createGain(); const t = C.currentTime; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03); s.connect(hp).connect(g).connect(SND.master); s.start(t, Math.random() * 1.5, 0.04); }
 function sndBird(vol) { const C = SND.C, t0 = C.currentTime; const n = 2 + Math.floor(Math.random() * 4), f0 = 2600 + Math.random() * 1600; for (let k = 0; k < n; k++) { const o = C.createOscillator(), g = C.createGain(); const t = t0 + k * (0.11 + Math.random() * 0.05); o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * (1.25 + Math.random() * 0.3), t + 0.05); o.frequency.exponentialRampToValueAtTime(f0 * 0.9, t + 0.09); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1); o.connect(g).connect(SND.master); o.start(t); o.stop(t + 0.11); } }
-function sndPluck(freq, vol, t) { const C = SND.C; t = t || C.currentTime; const o = C.createOscillator(), o2 = C.createOscillator(), g = C.createGain(), lp = C.createBiquadFilter(); o.type = 'triangle'; o2.type = 'sawtooth'; o.frequency.value = freq; o2.frequency.value = freq * 1.003; lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(500, t + 0.4); const g2 = C.createGain(); g2.gain.value = 0.25; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7); o.connect(lp); o2.connect(g2).connect(lp); lp.connect(g).connect(SND.master); o.start(t); o2.start(t); o.stop(t + 0.75); o2.stop(t + 0.75); }
+function sndPluck(freq, vol, t?) { const C = SND.C; t = t || C.currentTime; const o = C.createOscillator(), o2 = C.createOscillator(), g = C.createGain(), lp = C.createBiquadFilter(); o.type = 'triangle'; o2.type = 'sawtooth'; o.frequency.value = freq; o2.frequency.value = freq * 1.003; lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(500, t + 0.4); const g2 = C.createGain(); g2.gain.value = 0.25; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7); o.connect(lp); o2.connect(g2).connect(lp); lp.connect(g).connect(SND.master); o.start(t); o2.start(t); o.stop(t + 0.75); o2.stop(t + 0.75); }
 function sndSiren() {
   if (!SND.on || !SND.C) return; const C = SND.C, t = C.currentTime, D = 12;
   const o = C.createOscillator(), g = C.createGain(); o.type = 'sawtooth'; for (let k = 0; k < D; k++) { o.frequency.setValueAtTime(620, t + k); o.frequency.linearRampToValueAtTime(1180, t + k + 0.5); o.frequency.linearRampToValueAtTime(620, t + k + 1); }
@@ -722,7 +722,7 @@ function fpvGo(kind, o) {
 let fpvHudKey = '';
 function fpvFrame(dt) {
   if (!FPV.on) return;
-  const K = keys; let fw = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0) + FPV.move.f, st = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + FPV.move.s;
+  const K: any = keys; let fw = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0) + FPV.move.f, st = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0) + FPV.move.s;
   const turn = (K.ArrowRight || K.KeyE ? 1 : 0) - (K.ArrowLeft || K.KeyQ ? 1 : 0); FPV.yaw -= turn * dt * 1.6;
   let z;
   if (FPV.trans) {
@@ -786,7 +786,7 @@ function applyState(d) {
   }
   syncAdminInputs();
 }
-function applyNames() { Object.entries(EV.names).forEach(([id, v]) => { const n = NPCS[+id]; if (!n || !v) return; if (v.name) n.name = String(v.name).slice(0, 30); if (v.surname != null) n.surname = String(v.surname).slice(0, 40); if (v.arch && ARCH[v.arch] && n.role === 'student') setArch(n, v.arch); }); }
+function applyNames() { Object.entries(EV.names).forEach(([id, v]) => { const n = NPCS[+id]; if (!n || !v) return; if ((v as any).name) n.name = String((v as any).name).slice(0, 30); if ((v as any).surname != null) n.surname = String((v as any).surname).slice(0, 40); if ((v as any).arch && ARCH[(v as any).arch] && n.role === 'student') setArch(n, (v as any).arch); }); }
 function applyWeather() { const doy = SUN.doy; if (EV.weather === 'auto') pickWeather(doy, simDow); else { WX.kind = EV.weather; WX.bad = WX.kind === 'rain' || WX.kind === 'snow'; buildPrecip(); } skyT = -99; }
 function applyCrowd() { STUDENTS.forEach(s => { if (s.spawned && s.crowdR > EV.crowd && !s.leaving) { s.leaving = true; interrupt(s); leave(s, 'ушёл по делам'); } if (s.crowdR <= EV.crowd) s.leaving = false; }); }
 function periodChanged() { const t = simT; if (liveMode) { PREWARM = true; prewarm(t); PREWARM = false; } else { resetDay(); simT = t; } updAdmin(); renderNews(); }
@@ -858,7 +858,7 @@ function editorFrame() {
   ${n.role === 'student' ? `<label class="arow">Характер <select id="edArch">${Object.entries(ARCH).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>` : ''}
   <div class="seg"><button id="edSave">Сохранить</button></div><div class="ns">Так можно посадить в модель свою группу с настоящими именами.</div>`;
   document.getElementById('edName').value = n.name; document.getElementById('edSur').value = n.surname; const ar = document.getElementById('edArch'); if (ar) ar.value = n.arch || 'obs';
-  document.getElementById('edSave').onclick = () => { const v = { name: document.getElementById('edName').value.trim() || n.name, surname: document.getElementById('edSur').value.trim() }; if (ar) v.arch = ar.value; EV.names[n.id] = v; applyNames(); toast(`✏️ Сохранено: ${v.name} ${v.surname}`); cardTick = 9; saveState(); };
+  document.getElementById('edSave').onclick = () => { const v: any = { name: document.getElementById('edName').value.trim() || n.name, surname: document.getElementById('edSur').value.trim() }; if (ar) v.arch = ar.value; EV.names[n.id] = v; applyNames(); toast(`✏️ Сохранено: ${v.name} ${v.surname}`); cardTick = 9; saveState(); };
 }
 
 // ---------- обвязка: подключаемся к симуляции ----------
@@ -896,7 +896,7 @@ const _updateUI0 = updateUI; updateUI = () => {
   document.body.classList.toggle('alarm', !!E && E.type === 'alarm' && simT - E.t0 < 4);
   editorFrame();
 };
-const _simFrame0 = simFrame; simFrame = () => { const now = performance.now(); const dt = Math.min(0.1, (now - (simFrame._t || now)) / 1000); simFrame._t = now; _simFrame0(); propsFrame(dt); moodFrame(); sndFrame(dt); fpvFrame(dt); if (QUEUE.mesh) QUEUE.mesh.position.y = FZ[2] + floorYOff(2); if (QUEUE.mesh) QUEUE.mesh.visible = floorVis(2); };
+const _simFrame0 = simFrame; simFrame = () => { const now = performance.now(); const dt = Math.min(0.1, (now - ((simFrame as any)._t || now)) / 1000); (simFrame as any)._t = now; _simFrame0(); propsFrame(dt); moodFrame(); sndFrame(dt); fpvFrame(dt); if (QUEUE.mesh) QUEUE.mesh.position.y = FZ[2] + floorYOff(2); if (QUEUE.mesh) QUEUE.mesh.visible = floorVis(2); };
 
 function evUI() {
   const box = document.getElementById('simBox');
@@ -914,7 +914,7 @@ function evUI() {
   const fx = document.createElement('div'); fx.id = 'alarmFx'; host.appendChild(fx);
   fpvUI();
 }
-function evInit() {
+function evInit__base() {
   buildQueue(); buildProps(); evUI();
   if (R_COWORK && QUEUE.pts.length) {
     // буфет: студенты идут через очередь

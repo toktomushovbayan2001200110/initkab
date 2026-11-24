@@ -73,4 +73,16 @@ gunicorn initkab.wsgi
 python manage.py test
 ```
 
-Исходные части 3D-модели лежат в `viewer_src/`.
+## 3D-модель (TypeScript)
+
+Исходники модели лежат в `frontend/` и написаны на TypeScript. Сборка складывает всё в один файл
+`campus/viewer/index.html`, который отдаёт Django.
+
+```bash
+cd frontend
+npm install
+npm run typecheck   # проверка типов
+npm run build       # tsc + сборка index.html
+```
+
+Подробнее о структуре — в `frontend/README.md`.

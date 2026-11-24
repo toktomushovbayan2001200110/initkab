@@ -5,3 +5,5 @@ staticfiles/
 .venv/
 venv/
 .env
+node_modules/
+frontend/build/

@@ -324,8 +324,8 @@ const CLUBS = [
 function initClubs() { STUDENTS.forEach(s => { const want = s.traits.curious * 0.5 + s.traits.diligent * 0.3 + rr(0, 0.4); s.club = want > 0.62 ? pick(CLUBS) : null; }); }
 function clubRoom(club, t) {
   const day = simDay; if (club._day === day && club._room) return club._room;
-  const busy = new Set(); for (let p = 0; p < PAIRS.length; p++) if (PAIRS[p][1] > t && PAIRS[p][0] < t + 75) Object.values(SCHED[p]).forEach(s => busy.add(s.room));
-  CLUBS.forEach(c => { if (c !== club && c._day === day && c._room) busy.add(c._room.id); });
+  const busy = new Set(); for (let p = 0; p < PAIRS.length; p++) if (PAIRS[p][1] > t && PAIRS[p][0] < t + 75) Object.values(SCHED[p]).forEach((s: any) => busy.add(s.room));
+  CLUBS.forEach((c: any) => { if (c !== club && c._day === day && c._room) busy.add(c._room.id); });
   const pool = (club.pc ? PC_ROOMS : CLASS_ROOMS).filter(r => !busy.has(r.id) && r.name !== 'Лекционная аудитория');
   club._day = day; club._room = pool.length ? pool[0] : null; club._news = false; return club._room;
 }

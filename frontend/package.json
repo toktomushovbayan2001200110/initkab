@@ -1,0 +1,15 @@
+{
+  "name": "kgu-korpus-viewer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "3D-модель корпуса КГУ (ИНИТ, 3 этаж) — исходники на TypeScript",
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit",
+    "build": "tsc -p . && node build.mjs",
+    "dev": "tsc -p . --watch"
+  },
+  "devDependencies": {
+    "@types/three": "0.147.1",
+    "typescript": "5.9.3"
+  }
+}

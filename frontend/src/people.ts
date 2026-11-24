@@ -14,7 +14,7 @@ function loft(rings, seg = 14) {
 const plain = g => { const n = g.index ? g.toNonIndexed() : g; if (!n.attributes.uv) n.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(n.attributes.position.count * 2), 2)); if (!n.attributes.normal) n.computeVertexNormals(); return n; };
 const mergeG = list => BGU.mergeBufferGeometries(list.map(plain));
 // конечность, висящая вниз от сустава (0 … −L)
-function limb(L, r0, r1, mid) {
+function limb(L, r0, r1, mid?) {
   const rings = [[-L - r1 * 0.55, r1 * 0.45, r1 * 0.45], [-L - r1 * 0.2, r1 * 0.9, r1 * 0.9], [-L, r1, r1]];
   if (mid) rings.push([-L * mid[0], mid[1], mid[1], mid[2] || 0]);
   rings.push([0, r0, r0], [r0 * 0.5, r0 * 0.85, r0 * 0.85], [r0 * 0.85, r0 * 0.4, r0 * 0.4]);
@@ -34,7 +34,7 @@ function chestStrip(R, y0, y1, w0, w1, off, steps = 10) {
 const HR = 0.105;
 function headShape(x, y, z) { const t = y < 0 ? -y / HR : 0; const sx = 0.9 * (1 - 0.26 * t * t - 0.07 * t); const sz = z > 0 ? 1 - 0.1 * t : 1 - 0.2 * t; return [x * sx, y * 1.09, z * sz]; }
 function headZ(x, y) { const Y = y / 1.09, t = Y < 0 ? -Y / HR : 0, sx = 0.9 * (1 - 0.26 * t * t - 0.07 * t); const X = x / sx; return Math.sqrt(Math.max(0, HR * HR - X * X - Y * Y)) * (1 - 0.1 * t); }
-function headGeo(scale = 1, keep) {
+function headGeo(scale: number | number[] = 1, keep?) {
   const s = new THREE.SphereGeometry(HR, 18, 13); const p = s.attributes.position;
   for (let i = 0; i < p.count; i++) { const v = headShape(p.getX(i), p.getY(i), p.getZ(i)); p.setXYZ(i, v[0], v[1], v[2]); }
   if (!keep) { s.computeVertexNormals(); return s; }
@@ -131,10 +131,10 @@ function buildBodies() {
   P('brows', mergeG([-1, 1].map(s => { const b = new THREE.BoxGeometry(0.03, 0.0058, 0.008); b.rotateZ(-s * 0.1); b.translate(s * 0.034, 0.0345, bz - 0.001); return b; })), N, hairMat, false);
   P('face', mergeG([el(0.0105, 0.021, 0.014, 0, -0.012, nz - 0.002), el(0.0125, 0.0085, 0.01, 0, -0.024, nz + 0.001), ...[-1, 1].map(s => el(0.008, 0.021, 0.014, s * 0.0945, 0.002, -0.004))]), N, skinMat, false);
   P('mouth', mergeG([el(0.019, 0.0048, 0.005, 0, -0.049, mz - 0.001), el(0.014, 0.0052, 0.005, 0, -0.0555, mz - 0.003)]), N, new THREE.MeshStandardMaterial({ roughness: 0.55 }), false);
-  P('glasses', mergeG([-1, 1].map(s => { const e = new THREE.TorusGeometry(0.02, 0.0028, 4, 12); e.scale(1.1, 0.9, 1); e.translate(s * 0.034, 0.012, ez + 0.012); return e; }).concat([(() => { const b = new THREE.BoxGeometry(0.026, 0.004, 0.004); b.translate(0, 0.016, ez + 0.012); return b; })(), ...[-1, 1].map(s => { const b = new THREE.BoxGeometry(0.003, 0.004, 0.09); b.translate(s * 0.058, 0.014, ez - 0.035); return b; })])), N, new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.35, metalness: 0.4 }), false);
+  P('glasses', mergeG([-1, 1].map(s => { const e = new THREE.TorusGeometry(0.02, 0.0028, 4, 12); e.scale(1.1, 0.9, 1); e.translate(s * 0.034, 0.012, ez + 0.012); return e as THREE.BufferGeometry; }).concat([(() => { const b = new THREE.BoxGeometry(0.026, 0.004, 0.004); b.translate(0, 0.016, ez + 0.012); return b; })(), ...[-1, 1].map(s => { const b = new THREE.BoxGeometry(0.003, 0.004, 0.09); b.translate(s * 0.058, 0.014, ez - 0.035); return b; })])), N, new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.35, metalness: 0.4 }), false);
   P('stub', headGeo([1.035, 1.03, 1.05, -0.002, 0.002], (x, y, z) => y < -0.028 && z > -0.02 && !(Math.abs(x) < 0.022 && y > -0.062 && y < -0.04 && z > 0.05)), N, hairMat, false);
   // --- причёски ---
-  const capG = (sc, lf, ls, lb, side) => headGeo(sc, hairline(lf, ls, lb, side));
+  const capG = (sc, lf, ls, lb, side?) => headGeo(sc, hairline(lf, ls, lb, side));
   const S0 = [1.075, 1.07, 1.085, 0.004, -0.003];
   P('hShort', capG(S0, 0.066, 0.004, -0.062), N, hairMat);
   P('hFringe', mergeG([capG([1.08, 1.075, 1.1, 0.005, -0.002], 0.042, 0.0, -0.068), (() => { const b = el(0.085, 0.022, 0.03, 0, 0.062, headZ(0, 0.06) + 0.004, 10); return b; })()]), N, hairMat);
@@ -173,7 +173,7 @@ function buildBodies() {
   NPCS.forEach((n, i) => recolor(n, i));
   markColors();
 }
-function markColors() { Object.values(PART).forEach(m => { if (m.instanceColor) m.instanceColor.needsUpdate = true; }); COLOR_DIRTY = false; }
+function markColors() { Object.values(PART).forEach((m: any) => { if (m.instanceColor) m.instanceColor.needsUpdate = true; }); COLOR_DIRTY = false; }
 const _cc = new THREE.Color();
 function recolor(n, i) {
   if (!PART.torsoM) return;
@@ -214,7 +214,7 @@ const wrapA = a => ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI)
 const JK = ['thL', 'thR', 'shL', 'shR', 'uaL', 'uaR', 'faL', 'faR', 'uaLz', 'uaRz', 'headP', 'headY', 'torsoP', 'torsoY', 'hipY', 'hipX', 'ftL', 'ftR', 'headR'];
 let POSE_NOW = 0, POSE_DT = 0.016, POSE_LAST = 0;
 const TG = {};
-function poseNPC(n, i, vis) {
+function poseNPC__base(n, i, vis) {
   if (i === 0) { POSE_NOW = performance.now(); POSE_DT = Math.min(0.1, (POSE_NOW - POSE_LAST) / 1000) || 0.016; POSE_LAST = POSE_NOW; if (COLOR_DIRTY) markColors(); }
   if (!vis) { if (n.shown !== false) { n.shown = false; n.J = null; for (const p of PARTS1) setP(p, i, ZERO); for (const p of PARTS2) { setP(p, i * 2, ZERO); setP(p, i * 2 + 1, ZERO); } } return; }
   n.shown = true;
@@ -224,7 +224,7 @@ function poseNPC(n, i, vis) {
   const wantCoat = COLD && n.f === 3 && n.coatHas; if (wantCoat !== !!n.coatOn) { n.coatOn = wantCoat; recolor(n, i); }
   // ---- целевые углы ----
   const g = n.gait || 1, sw = Math.sin(t) * 0.5 * w * g;
-  const T = TG;
+  const T: any = TG;
   T.thL = -sw; T.thR = sw;
   T.shL = (Math.max(0, Math.sin(t + 1.15)) * 0.95 + 0.06) * w; T.shR = (Math.max(0, Math.sin(t + 1.15 + Math.PI)) * 0.95 + 0.06) * w;
   const as = n.armSw || 0.9;

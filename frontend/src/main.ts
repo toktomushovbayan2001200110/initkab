@@ -1,0 +1,1 @@
+build().then(()=>new Promise(r=>setTimeout(r,30))).then(async()=>{applyVis(); await initSim(); document.getElementById('load').remove(); window.simReady=true; setFloor('2'); loop();}).catch(e=>{document.getElementById('load').textContent='Ошибка загрузки: '+e.message;console.error(e);});

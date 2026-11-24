@@ -221,7 +221,7 @@ renderer.domElement.addEventListener('pointerup', e => {
   const now = performance.now(); if (now - EGG.flagT > 4000) EGG.flagN = 0; EGG.flagT = now; EGG.flagN++; if (EGG.flagN >= 5) { EGG.flagN = 0; fireworks(); }
 });
 // кот ИНИТ
-const CAT = { g: null, path: null, pi: 0, x: 0, y: 0, a: 0, wait: 0, ph: 0 };
+const CAT: any = { g: null, path: null, pi: 0, x: 0, y: 0, a: 0, wait: 0, ph: 0 };
 function buildCat() {
   const g = new THREE.Group(); const fur = new THREE.MeshStandardMaterial({ color: LIN(0xd9893a), roughness: 0.9 }), dark = new THREE.MeshStandardMaterial({ color: LIN(0x6b3f1d), roughness: 0.9 });
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.26, 4, 8), fur); body.rotation.z = Math.PI / 2; body.position.y = 0.2; g.add(body);
@@ -229,7 +229,7 @@ function buildCat() {
   [-1, 1].forEach(s => { const ear = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.06, 4), dark); ear.position.set(0.23, 0.37, s * 0.045); g.add(ear); const eye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 4), new THREE.MeshBasicMaterial({ color: 0x9be36b })); eye.position.set(0.295, 0.305, s * 0.035); g.add(eye); });
   const legs = []; [[0.12, 1], [0.12, -1], [-0.12, 1], [-0.12, -1]].forEach(([x, s]) => { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.02, 0.16, 6), fur); l.position.set(x, 0.08, s * 0.05); g.add(l); legs.push(l); });
   const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.012, 0.3, 6), dark); tail.position.set(-0.26, 0.32, 0); tail.rotation.z = 0.6; g.add(tail);
-  g.traverse(o => { if (o.isMesh) o.castShadow = true; }); g.visible = false; scene.add(g); CAT.g = g; CAT.legs = legs; CAT.tail = tail;
+  g.traverse((o: any) => { if (o.isMesh) o.castShadow = true; }); g.visible = false; scene.add(g); CAT.g = g; CAT.legs = legs; CAT.tail = tail;
   const s = corridorSpotNear(2, 0, 0, 40); if (s) { CAT.x = s.x; CAT.y = s.y; }
 }
 function catFrame(dt) {
@@ -244,4 +244,4 @@ function catFrame(dt) {
 }
 // подключение
 const _evInit0 = evInit; evInit = () => { _evInit0(); try { const st = designFloor3(); console.log('design', JSON.stringify(st)); } catch (e) { console.error('design', e); } buildCat(); };
-const _simFrame1 = simFrame; simFrame = () => { const now = performance.now(); const dt = Math.min(0.1, (now - (eggFrame._t || now)) / 1000); eggFrame._t = now; _simFrame1(); lampsFrame(); eggFrame(dt); };
+const _simFrame1 = simFrame; simFrame = () => { const now = performance.now(); const dt = Math.min(0.1, (now - ((eggFrame as any)._t || now)) / 1000); (eggFrame as any)._t = now; _simFrame1(); lampsFrame(); eggFrame(dt); };

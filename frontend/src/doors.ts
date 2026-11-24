@@ -1,5 +1,5 @@
 // ================= ДВЕРИ: открываются, когда кто-то проходит =================
-const DOORS = [];
+const DOORS: Door[] = [];
 function buildDoors() {
   const f = 2, G = GRID[f], seen = new Uint8Array(G.length);
   // проёмы = связные группы клеток -2 на сетке 3 этажа
@@ -64,7 +64,7 @@ function buildDoors() {
   if (window.DEBUG_DOORS) console.log('doors', DOORS.length);
 }
 let doorK = 0;
-function doorsFrame(dt) {
+function doorsFrame(dt: number): void {
   if (!DOORS.length) return;
   // кто рядом с дверью: проверяем часть дверей за кадр
   const per = Math.max(4, Math.ceil(DOORS.length / 3));

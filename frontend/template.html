@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Живой корпус КГУ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#e9ecef; --panel:#fbfcfd; --fg:#1d2630; --muted:#5d6b78; --line:#cfd6dd;
+  --accent:#1f5fa8; --accent-fg:#ffffff; --chip:#eef2f6;
+  --f-display:"Unbounded",system-ui,sans-serif; --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a20; --panel:#1c242c; --fg:#e4eaf0; --muted:#94a3b1; --line:#2f3a45; --accent:#6aa6ea; --accent-fg:#0d1620; --chip:#25303a; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141a20; --panel:#1c242c; --fg:#e4eaf0; --muted:#94a3b1; --line:#2f3a45; --accent:#6aa6ea; --accent-fg:#0d1620; --chip:#25303a; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);overflow:hidden}
+#app{position:relative;height:100%;width:100%}
+#view{position:absolute;inset:0;z-index:0}
+#view canvas{display:block;touch-action:none}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.12);z-index:5}
+#ctrl{top:max(12px,env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));width:276px;padding:14px;display:flex;flex-direction:column;gap:12px;max-height:calc(100% - 24px);overflow:auto}
+h1{font-family:var(--f-display);font-size:15px;font-weight:600;margin:0;line-height:1.3;text-wrap:balance}
+.sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+.grp{display:flex;flex-direction:column;gap:6px}
+.lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+button{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:6px;padding:6px 9px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.tog{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.tog input{accent-color:var(--accent);width:15px;height:15px}
+#exp{top:max(12px,env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));width:290px;max-height:calc(100% - 24px);overflow:auto;padding:14px}
+#exp h2{font-family:var(--f-display);font-size:13px;font-weight:500;margin:0 0 8px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-weight:500;color:var(--muted);text-align:right;padding:4px;font-size:11px}
+th:first-child{text-align:left}
+td{padding:5px 4px;border-top:1px solid var(--line);vertical-align:top}
+td.a{font-family:var(--f-mono);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.fl{cursor:pointer} tr.fl:hover td{background:var(--chip)}
+.note{font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:10px}
+#pick{margin-top:10px;font-size:12.5px;line-height:1.45;padding:8px 10px;border-radius:8px;background:var(--chip);display:none}
+#pick b{font-family:var(--f-mono);font-weight:500}
+.hint{position:absolute;bottom:max(12px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:5px 10px;border-radius:20px;z-index:4;white-space:nowrap}
+#load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:20;font-family:var(--f-display);font-size:14px;color:var(--muted);background:var(--bg)}
+#mtop,#mbar,.sheetClose{display:none}
+@media (max-width:760px){
+  #mtop{display:flex;position:absolute;z-index:5;top:max(10px,env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));align-items:center;justify-content:space-between;gap:8px;pointer-events:none}
+  #mtop b{font-family:var(--f-display);font-size:14px;font-weight:600;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:7px 13px;box-shadow:0 4px 14px rgba(0,0,0,.12);pointer-events:auto}
+  #mbar{display:flex;position:absolute;z-index:6;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));bottom:max(10px,env(safe-area-inset-bottom,0px));gap:6px;padding:7px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+  #mbar button{flex:1;min-height:44px;font-size:13.5px;padding:6px 4px;border-radius:11px}
+  #mbar .mf{display:flex;flex:4;gap:4px}
+  #mbar .mm{flex:1.3;font-size:18px}
+  #ctrl,#exp{display:none;left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));width:auto;top:auto;bottom:calc(max(10px,env(safe-area-inset-bottom,0px)) + 72px);max-height:58%;border-radius:16px;padding:14px 14px 16px;overflow:auto}
+  body.menu-open #ctrl{display:flex} body.exp-open #exp{display:block}
+  #ctrl .grp.floorsG,#ctrl .head{display:none}
+  .sheetClose{display:block;align-self:flex-end;font-size:15px;padding:4px 10px;margin:-6px -6px 0 auto}
+  .hint{display:none}
+}
+#bubbles,#roomtags{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.bub{position:absolute;left:0;top:0;max-width:190px;font-size:11.5px;line-height:1.3;color:#1d2630;background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:10px;padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,.18);white-space:normal;text-align:center}
+.bub::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-5px;border:5px solid transparent;border-top-color:#fff;border-bottom:0}
+.bub.t{background:#fff6dc}.bub.t::after{border-top-color:#fff6dc}
+#liveBan{display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:6;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.18);max-width:min(560px,calc(100% - 32px));text-align:center}#liveBan button{margin-left:8px}
+.live{color:#e5484d;font-weight:600}
+#bellToast{position:absolute;top:60px;left:50%;transform:translate(-50%,-10px);z-index:7;background:#fff6dc;color:#3a2d00;border:1px solid #e9c46a;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap}
+#bellToast.on{opacity:1;transform:translate(-50%,0)}
+body.photo .panel,body.photo #mbar,body.photo .hint,body.photo #liveBan,body.photo #bellToast,body.photo #bubbles,body.photo #mtop{display:none!important}
+#todayBox h2{margin-top:0}#todayBox .today{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:6px 0 10px}
+#todayBox .today div{background:var(--chip);border-radius:6px;padding:5px 4px;text-align:center}#todayBox .today b{display:block;font-size:14px}#todayBox .today span{font-size:9.5px;word-break:break-word;color:var(--muted);line-height:1.15;display:block}
+#todayBox .rank{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:12px;margin-bottom:14px;align-items:baseline}#todayBox .rank a{color:var(--accent);cursor:pointer;text-decoration:underline}#todayBox .rank span{color:var(--muted);font-size:11px;margin-left:4px}
+.rtag{position:absolute;left:0;top:0;font-size:10.5px;line-height:1.2;color:#1d2630;background:rgba(255,255,255,.78);border-radius:5px;padding:2px 6px;white-space:nowrap}
+.rtag b{font-family:var(--f-mono);font-weight:500;color:#1f5fa8;margin-right:4px}
+.clock{display:flex;align-items:baseline;gap:8px}.clock b{font-family:var(--f-mono);font-size:22px;font-weight:500;font-variant-numeric:tabular-nums}.clock span{font-size:12px;color:var(--muted)}
+.sstat{font-size:12.5px;line-height:1.45}.sstat span{color:var(--muted);font-size:11.5px}
+#npcCard{display:none;margin-bottom:12px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--chip);font-size:12.5px;line-height:1.45}
+#npcCard .nh{display:flex;gap:10px;align-items:center;margin-bottom:6px}
+#npcCard .av{flex:none;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-family:var(--f-display);font-size:14px}
+#npcCard .ns{color:var(--muted);font-size:11.5px}
+#npcCard .na{font-weight:500;margin:4px 0 2px}
+#npcCard .nt{margin:6px 0 2px;font-style:italic}
+#npcCard .nb{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:3px}
+#npcCard .nb span{width:58px}#npcCard .nb i{flex:1;height:5px;border-radius:3px;background:var(--line);overflow:hidden}#npcCard .nb em{display:block;height:100%;background:var(--accent)}
+#npcCard .seg{margin-top:8px}
+#ticker{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(max(12px,env(safe-area-inset-bottom,0px)) + 34px);width:min(760px,calc(100% - 640px));min-width:300px;z-index:4;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 12px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);overflow:hidden}
+#ticker em{font-style:normal;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:#fff;background:#e5484d;border-radius:12px;padding:3px 8px;font-weight:600;flex:none}
+#ticker .tkw{overflow:hidden;flex:1;-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+#ticker .tk{display:flex;white-space:nowrap;width:max-content;animation:tk 40s linear infinite}
+#ticker .tk span{padding-right:48px}#ticker i{font-style:normal;color:var(--muted);margin:0 10px}#ticker b{font-weight:600}#ticker b.ann{color:#e5484d}
+@keyframes tk{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){#ticker .tk{animation-duration:160s!important}}
+#moods{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.mood{position:absolute;left:0;top:0;font-size:17px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));transform-origin:50% 100%}
+#evStat{display:none;margin-top:2px}#evStat .evOn{color:#e5484d}
+#adminBox{border:1px solid var(--line);border-radius:10px;padding:10px;background:linear-gradient(180deg,rgba(229,72,77,.06),transparent 60%)}
+#adminBox .lbl span{text-transform:none;letter-spacing:0;font-weight:500;color:var(--accent)}
+.arow{display:flex;align-items:center;gap:6px;font-size:12.5px}.arow select,.arow input:not([type=range]){flex:1;min-width:0;font:inherit;font-size:12.5px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--chip);color:var(--fg)}
+.arow input[type=range]{flex:1;accent-color:var(--accent)}.arow b{font-family:var(--f-mono);font-weight:500;font-size:12px;width:38px;text-align:right}
+#adminBox details summary{cursor:pointer;font-size:12.5px;margin:2px 0 6px}#adminBox .sch{display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;border-top:1px solid var(--line)}#adminBox .sch button{margin-left:auto;padding:2px 7px}
+#adminBox .ns,#npcEdit .ns{font-size:11.5px;color:var(--muted)}
+#npcEdit{display:none;margin:-4px 0 12px;padding:10px;border:1px dashed var(--accent);border-radius:8px}#npcEdit .arow{margin:6px 0}
+#alarmFx{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:0;box-shadow:inset 0 0 120px 30px rgba(229,30,40,.55)}
+body.alarm #alarmFx{animation:alrm 1s ease-in-out infinite}@keyframes alrm{50%{opacity:1}}
+#fpvHud{display:none;position:absolute;inset:0;pointer-events:none;z-index:6}
+body.fpv #fpvHud{display:block}body.fpv #ctrl,body.fpv #exp,body.fpv .hint,body.fpv #mbar,body.fpv #liveBan,body.fpv #mtop{display:none!important}
+.fpvTop{position:absolute;top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;pointer-events:auto}
+.fpvTop b{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;white-space:nowrap}
+#fpvAct{position:absolute;left:50%;transform:translateX(-50%);bottom:110px;display:flex;gap:8px;pointer-events:auto}#fpvAct button{font-size:14px;padding:9px 14px;background:var(--accent);color:var(--accent-fg);border-color:var(--accent);box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.fpvPad{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:max(20px,env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:auto}.fpvPad div{display:flex;gap:4px}.fpvPad button{width:48px;height:44px;font-size:16px;opacity:.85}
+.fpvHint{position:absolute;bottom:max(14px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:5px 10px;border-radius:20px;white-space:nowrap}
+body.fpv #ticker{bottom:52px}
+body.photo #ticker,body.photo #moods,body.photo #fpvHud{display:none!important}
+@media (max-width:760px){#ticker{width:auto;left:10px;right:10px;transform:none;min-width:0;bottom:calc(max(10px,env(safe-area-inset-bottom,0px)) + 80px)}.fpvHint{display:none}#fpvAct{bottom:150px}}
+@media (min-width:761px) and (max-width:1200px){#ticker{width:calc(100% - 640px)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="view"></div>
+  <div id="load">Загрузка модели…</div>
+  <div id="mtop"><b>КГУ · 1 корпус</b></div>
+  <div id="ctrl" class="panel">
+    <button class="sheetClose" data-close aria-label="Закрыть">✕</button>
+    <div class="head">
+      <h1>КГУ им. И. Арабаева · 1 корпус</h1>
+      <div class="sub" id="sub">3D-макет по проекту ArchiCAD. Весь 3 этаж — Институт новых информационных технологий: студенты, преподаватели и IT-отдел живут по расписанию пар.</div>
+    </div>
+    <div class="grp floorsG">
+      <div class="lbl">Этаж</div>
+      <div class="seg" id="floors">
+        <button data-f="all" class="on">Всё здание</button>
+        <button data-f="2">3 этаж · ИНИТ</button>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="lbl">Вид</div>
+      <div class="seg" id="views">
+        <button data-v="iso" class="on">3D</button>
+        <button data-v="top">Сверху</button>
+        <button data-v="s">Фасад Ю</button>
+        <button data-v="n">Фасад С</button>
+        <button data-v="w">Фасад З</button>
+        <button data-v="e">Фасад В</button>
+      </div>
+    </div>
+    <div class="grp">
+      <label class="tog"><input type="checkbox" id="cRoof" checked> Кровля</label>
+      <label class="tog"><input type="checkbox" id="cFurn" checked> Мебель и оборудование</label>
+      <label class="tog"><input type="checkbox" id="cExplode"> Разнести этажи</label>
+      <label class="tog"><input type="checkbox" id="cRotate"> Автовращение</label>
+    </div>
+  </div>
+  <div id="exp" class="panel">
+    <button class="sheetClose" data-close aria-label="Закрыть">✕</button>
+    <h2>Состав модели</h2>
+    <table id="tbl"></table>
+    <div id="pick"></div>
+    <div class="note" id="dims"></div>
+    <div class="note">Нажмите на человечка, чтобы открыть его карточку: кто это, что делает, о чём думает и с кем дружит. Модель живёт по реальному времени Бишкека: две смены, пары по 80 минут, вечером все расходятся.</div>
+  </div>
+  <div id="mbar">
+    <div class="mf" id="mFloors">
+      <button data-f="all" class="on">Здание</button><button data-f="2">3 этаж · ИНИТ</button>
+    </div>
+    <button class="mm" id="mMenu" aria-label="Настройки">☰</button>
+    <button class="mm" id="mInfo" aria-label="Состав">ℹ</button>
+  </div>
+  <div class="hint">ЛКМ — вращать · ПКМ — сдвиг · колесо — к курсору · двойной клик — фокус · WASD — движение</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script id="simdata" type="application/json">__SIM__</script>
+<script>
+/*__APP__*/
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 // ================= МИР: двор, деревья, горы, небо по времени суток =================
 // Солнце Бишкека (42.9° с.ш., 74.6° в.д., UTC+6): солнечный полдень ≈ 12:58 по местному времени
-const SUN = { rise: 470, set: 1060, noon: 778, maxEl: 30, doy: 327 };
+const SUN: any = { rise: 470, set: 1060, noon: 778, maxEl: 30, doy: 327 };
 function setSunDay(doy) {
   SUN.doy = doy;
   const decl = 23.44 * Math.sin(2 * Math.PI * (doy - 81) / 365);
@@ -20,7 +20,7 @@ function sunPos(t) {   // возвращает высоту (°) и направ
 }
 
 // ---------- ресурсы двора ----------
-const CITY = {
+const CITY: any = {
   // [x0, x1, y0, y1] в координатах симуляции (x — восток, y — север), по карте OSM вокруг ул. Раззакова 51
   roads: [[-44, -35.5, -300, 300, 'Раззакова', 'S'], [-300, 300, -97, -83, 'Токтогула', 'W'], [72, 79, -300, 300, 'Эркиндик', 'S'], [134, 141, -300, 300, 'Эркиндик', 'N'], [-300, 300, 131, 139, 'Киевская', 'E']],
   walks: [[-48, -44, -300, 300], [-35.5, -31.3, -300, 300], [-300, 300, -100, -97], [-300, 300, -83, -79.5], [69, 72, -300, 300], [141, 144, -300, 300], [-300, 300, 128, 131], [-300, 300, 139, 142]],
@@ -31,7 +31,7 @@ const CITY = {
     [-80, -50, 60, 120, 15, 0xd0c4ae], [60, 70, 145, 175, 10, 0xd8cbb4], [-20, 30, 146, 180, 18, 0xc9c0b0]],
   field: [-29, 14, -76, -39],
 };
-const W = { lampMats: [], lights: [], flag: null, stars: null, mts: [], glass: [], amb: null, treeCrowns: [], grassMats: [] };
+const W: any = { lampMats: [], lights: [], flag: null, stars: null, mts: [], glass: [], amb: null, treeCrowns: [], grassMats: [] };
 const C = (h) => new THREE.Color(h);
 function seasonOf(doy) { const m = new Date(Date.UTC(2026, 0, doy)).getUTCMonth(); return m <= 1 || m === 11 ? 'winter' : m <= 3 ? 'spring' : m <= 7 ? 'summer' : m === 8 ? 'early' : 'autumn'; }
 const SEASON = {
@@ -68,7 +68,7 @@ function buildWorld() {
   // ворота: восточные (к Эркиндику), юго-западные и северо-западные (на ул. Раззакова)
   const FX0 = -31.3;   // западная ограда вдоль тротуара ул. Раззакова
   { const G = GRID[3]; for (let j = 0; j < SNY; j++) for (let i2 = 0; i2 < SNX; i2++) if (wx(i2) < FX0 + 0.2) G[j * SNX + i2] = -1; }
-  [[36.4, -2, [[38.6, -2], [38.6, 31], [74, 31]], 0.3], [-29.6, -31.4, [[-33.4, -31.4], [-33.4, -84]], 0.45], [-29.6, 30.2, [[-33.4, 30.2], [-33.4, 126]], 0.25]].forEach(([x, y, pts, w]) => { const p = nearestPass(3, x, y, 30); if (p) GATES.push({ x: wx(p[0]), y: wy(p[1]), pts, ox: pts[pts.length - 1][0], oy: pts[pts.length - 1][1], w }); });
+  [[36.4, -2, [[38.6, -2], [38.6, 31], [74, 31]], 0.3], [-29.6, -31.4, [[-33.4, -31.4], [-33.4, -84]], 0.45], [-29.6, 30.2, [[-33.4, 30.2], [-33.4, 126]], 0.25]].forEach(([x, y, pts, w]) => { const p = nearestPass(3, x, y, 30); if (p) GATES.push({ x: wx(p[0]), y: wy(p[1]), pts, ox: pts[(pts as any).length - 1][0], oy: pts[(pts as any).length - 1][1], w }); });
   // расстояние до здания (в клетках)
   const n = SNX * SNY, distB = new Int16Array(n).fill(9999), q = [];
   for (let k = 0; k < n; k++) if (FP[k] || G3[k] !== -2) { distB[k] = 0; q.push(k); }
@@ -97,7 +97,7 @@ function buildWorld() {
   if (GATES[1]) segs.push([GATES[1].x, GATES[1].y, 4, -31, 2.8], [4, -31, plaza.x, plaza.y - plaza.r, 2.6]);
   if (GATES[2]) segs.push([GATES[2].x, GATES[2].y, 28, 30.2, 3.0], [28, 30.2, 30, 12, 2.6]);
   segs.push([SX0 + 1.5, SY0 + 1.5, X1 - 1.5, SY0 + 1.5, 2.6], [SX0 + 1.5, Y1 - 1.5, X1 - 1.5, Y1 - 1.5, 2.6], [X1 - 1.5, SY0 + 1.5, X1 - 1.5, Y1 - 1.5, 2.6], [FX0 + 1.8, SY0 + 1.5, FX0 + 1.8, Y1 - 1.5, 2.6]);
-  segs.forEach(s => markSeg(...s));
+  segs.forEach(s => markSeg(...(s as [any, any, any, any, any])));
   for (let j = 0; j < SNY; j++) for (let i = 0; i < SNX; i++) if (Math.hypot(wx(i) - plaza.x, wy(j) - plaza.y) < plaza.r) paved[j * SNX + i] = 1;
   // рисуем плитку по маске (клетка = 1.6 px)
   g.putImageData(img, 0, 0);
@@ -243,7 +243,7 @@ function buildWorld() {
   const fpx = sx + 0.4, fpy = sy + 3.6;
   const fpole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 9, 8), new THREE.MeshStandardMaterial({ color: 0xcfd3d6, metalness: 0.6, roughness: 0.3 }));
   fpole.position.set(fpx, OUTZ + 4.5, -fpy); fpole.castShadow = true; scene.add(fpole);
-  flag.position.set(fpx + 0.05, OUTZ + 8.1, -fpy); flag.castShadow = true; scene.add(flag); W.flag = flag; W.flagBase = flG.attributes.position.array.slice();
+  flag.position.set(fpx + 0.05, OUTZ + 8.1, -fpy); flag.castShadow = true; scene.add(flag); W.flag = flag; W.flagBase = (flG.attributes.position.array as any).slice();
   blockDisk(fpx, fpy, 0.3);
 
   // ---- горы Ала-Тоо на юге (+z в мире)
@@ -290,7 +290,7 @@ function updateSky(t) {
   const U = sky.material.uniforms;
   U.top.value.copy(L('top')); U.hor.value.copy(L('hor')); U.bot.value.copy(L('bot')); scene.fog.color.copy(U.hor.value);
   sun.color.copy(L('sun')); sun.intensity = a.si + (b.si - a.si) * f; hemi.intensity = a.hemi + (b.hemi - a.hemi) * f; renderer.toneMappingExposure = a.exp + (b.exp - a.exp) * f;
-  if (WX.kind !== 'clear') { const k = WX.kind === 'cloudy' ? 0.5 : 0.3; sun.intensity *= k; hemi.intensity *= WX.kind === 'cloudy' ? 1.15 : 1.05; const grey = _c2.set(0x9aa3ad).multiplyScalar(Math.max(0.15, Math.min(1, (el + 6) / 20))); U.top.value.lerp(grey, 0.75); U.hor.value.lerp(grey, 0.5); scene.fog.color.copy(U.hor.value); scene.fog.near = WX.bad ? 60 : 150; scene.fog.far = WX.bad ? 380 : 650; } else { scene.fog.near = 200; scene.fog.far = 800; }
+  if (WX.kind !== 'clear') { const k = WX.kind === 'cloudy' ? 0.5 : 0.3; sun.intensity *= k; hemi.intensity *= WX.kind === 'cloudy' ? 1.15 : 1.05; const grey = _c2.set(0x9aa3ad).multiplyScalar(Math.max(0.15, Math.min(1, (el + 6) / 20))); U.top.value.lerp(grey, 0.75); U.hor.value.lerp(grey, 0.5); scene.fog.color.copy(U.hor.value); (scene.fog as any).near = WX.bad ? 60 : 150; (scene.fog as any).far = WX.bad ? 380 : 650; } else { (scene.fog as any).near = 200; (scene.fog as any).far = 800; }
   if (el > -2) sun.position.copy(dir).multiplyScalar(110).setY(Math.max(6, dir.y * 110)); else sun.position.set(30, 70, -25);
   const night = Math.max(0, Math.min(1, (3 - el) / 9));
   const open = t > 400 && t < 1290 && !holiday() && !(EV.cur && EV.cur.type === 'power') && PERIOD() !== 'vacation';       // в корпусе горит свет
@@ -301,7 +301,7 @@ function updateSky(t) {
   if (W.stars) W.stars.material.opacity = Math.max(0, Math.min(1, (-el - 4) / 8)) * 0.9;
   if (W.amb) W.amb.intensity = night * (open ? 0.12 : 0.04);
   const day = Math.max(0.16, Math.min(1, (el + 8) / 22));
-  if (!W.envMats) { W.envMats = []; scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { if (m.envMapIntensity != null && !W.envMats.includes(m)) { m.userData.envB = m.envMapIntensity; W.envMats.push(m); } }); }); }
+  if (!W.envMats) { W.envMats = []; scene.traverse((o: any) => { if (o.material) [].concat(o.material).forEach(m => { if (m.envMapIntensity != null && !W.envMats.includes(m)) { m.userData.envB = m.envMapIntensity; W.envMats.push(m); } }); }); }
   const envK = Math.max(0.06, Math.min(1, (el + 4) / 16)) * (WX.kind === 'clear' ? 1 : 0.75);
   W.envMats.forEach(m => m.envMapIntensity = m.userData.envB * envK);
   const haze = WX.bad ? 0.35 : WX.kind === 'cloudy' ? 0.7 : 1; W.mts.forEach(m => m.visible = haze > 0.4); W.mts.forEach(m => m.material.color.copy(_c1.set(0xffffff).multiplyScalar(day)).lerp(_c2.set(0xffb08a), el > -3 && el < 8 ? 0.25 * (1 - Math.abs(el - 2) / 6) : 0));
@@ -323,7 +323,7 @@ const WX = { kind: 'clear', bad: false, temp: 5, parts: null, kindP: null };
 function dayHash(d) { let x = (d * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13; return (x >>> 0) / 4294967296; }
 function pickWeather(doy, dow) {
   const se = seasonOf(doy); const r = dayHash(doy * 7 + 3);
-  const P = se === 'winter' ? [['clear', 0.35], ['cloudy', 0.3], ['snow', 0.35]] : se === 'summer' ? [['clear', 0.7], ['cloudy', 0.2], ['rain', 0.1]] : se === 'autumn' ? [['clear', 0.45], ['cloudy', 0.3], ['rain', 0.15], ['snow', 0.1]] : [['clear', 0.5], ['cloudy', 0.3], ['rain', 0.2]];
+  const P: [string, number][] = se === 'winter' ? [['clear', 0.35], ['cloudy', 0.3], ['snow', 0.35]] : se === 'summer' ? [['clear', 0.7], ['cloudy', 0.2], ['rain', 0.1]] : se === 'autumn' ? [['clear', 0.45], ['cloudy', 0.3], ['rain', 0.15], ['snow', 0.1]] : [['clear', 0.5], ['cloudy', 0.3], ['rain', 0.2]];
   let acc = 0; WX.kind = P[P.length - 1][0]; for (const [k, p] of P) { acc += p; if (r < acc) { WX.kind = k; break; } }
   if (WX.kind === 'snow' && MONTH_T[new Date(Date.UTC(2026, 0, doy)).getUTCMonth()] > 8) WX.kind = 'rain';
   WX.bad = WX.kind === 'rain' || WX.kind === 'snow';
@@ -373,7 +373,7 @@ function buildTraffic() {
     const L = bus ? 2.0 : 1.35; [[-0.86, L], [0.86, L], [-0.86, -L], [0.86, -L]].forEach(([x, z]) => { const w = new THREE.Mesh(wheelG, tireM); w.position.set(x, 0.33, z); g.add(w); });
     const half = bus ? 2.95 : 2.15; [-0.6, 0.6].forEach(x => { const h = new THREE.Mesh(lightG, headM); h.position.set(x, bus ? 0.8 : 0.7, half + 0.01); const t = new THREE.Mesh(lightG, tailM); t.position.set(x, bus ? 0.9 : 0.75, -half - 0.01); g.add(h, t); });
     if (bus) { const s = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.34), signM); s.position.set(0, 2.15, half + 0.02); g.add(s); const st = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.18, 5.92), new THREE.MeshStandardMaterial({ color: 0xf2b705 })); st.position.y = 1.1; g.add(st); }
-    g.traverse(o => { if (o.isMesh) o.castShadow = true; }); scene.add(g); return g;
+    g.traverse((o: any) => { if (o.isMesh) o.castShadow = true; }); scene.add(g); return g;
   };
   // маршруты: Раззакова (на юг), Токтогула (на запад, 2 полосы), Эркиндик (юг/север), Киевская (на восток)
   const R = [{ x: -40.5, y: 300, dx: 0, dy: -1, n: 5 }, { x: 300, y: -87, dx: -1, dy: 0, n: 6, stop: -5 }, { x: 300, y: -92.5, dx: -1, dy: 0, n: 5 }, { x: 75.5, y: 300, dx: 0, dy: -1, n: 4, stop: -40 }, { x: 137.5, y: -300, dx: 0, dy: 1, n: 4 }, { x: -300, y: 135, dx: 1, dy: 0, n: 3 }];
@@ -387,7 +387,7 @@ function buildTraffic() {
   const backS = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.8, 4), new THREE.MeshPhysicalMaterial({ color: 0xbfd6e8, transparent: true, opacity: 0.35, roughness: 0.1 })); backS.position.set(-0.75, 1.3, 0);
   const benchS = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, 3), new THREE.MeshStandardMaterial({ color: 0x8a5a34 })); benchS.position.set(-0.45, 0.46, 0);
   shelter.add(roofS, backS, benchS); [-1.9, 1.9].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4), new THREE.MeshStandardMaterial({ color: 0x333 })); p.position.set(-0.7, 1.2, z); shelter.add(p); });
-  shelter.position.set(-5, OUTZ, 81.6); shelter.rotation.y = Math.PI / 2; scene.add(shelter); shelter.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  shelter.position.set(-5, OUTZ, 81.6); shelter.rotation.y = Math.PI / 2; scene.add(shelter); shelter.traverse((o: any) => { if (o.isMesh) o.castShadow = true; });
 }
 function trafficFrame(dt) {
   const k = Math.min(simSpeed, 6); if (!k) return; const d = dt * k;
