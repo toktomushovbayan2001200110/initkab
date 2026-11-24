@@ -1249,7 +1249,16 @@ function buildScreens() {
         const [x0, y0, z0, x1, y1, z1] = p.bb;
         const sx = x1 - x0, sy = y1 - y0, sz = z1 - z0;
         // в какую сторону смотрит экран: к стулу, который на него смотрит
-        const seat = SEATS.find(s => s.pc === p.id);
+        let seat = SEATS.find(s => s.pc === p.id);
+        // у iMac в IT-отделе место может быть не привязано: берём ближайший стул, иначе экран смотрел в стену и висел позади монитора
+        if (!seat || Math.hypot(seat.p[0] - p.c[0], seat.p[1] - p.c[1]) > 2) {
+            let bd = 1.6;
+            SEATS.forEach(s => { if (s.f !== p.f)
+                return; const d = Math.hypot(s.p[0] - p.c[0], s.p[1] - p.c[1]); if (d < bd) {
+                bd = d;
+                seat = s;
+            } });
+        }
         const tx = seat ? seat.p[0] : roomById(p.room)?.c[0] ?? p.c[0], ty = seat ? seat.p[1] : roomById(p.room)?.c[1] ?? p.c[1];
         let nx, ny, wdt;
         if (sx < sy) {
@@ -1265,7 +1274,8 @@ function buildScreens() {
         const thick = Math.min(sx, sy);
         const hgt = p.imac ? sz * 0.62 : Math.min(sz * 0.62, wdt * 0.62);
         const zc = z1 - hgt / 2 - sz * 0.05;
-        const px = p.c[0] + nx * (thick / 2 + 0.006), py = p.c[1] + ny * (thick / 2 + 0.006);
+        const off = p.imac ? 0.055 : thick / 2 + 0.006;
+        const px = p.c[0] + nx * off, py = p.c[1] + ny * off;
         p.screen = { x: px, y: py, z: zc, w: wdt * 0.9, h: hgt, nx, ny };
         p.state = 0;
         p.tile = 0;
@@ -2591,6 +2601,9 @@ function teachBehaviour__base(n, T, dt) {
     if (T.mode === 'back') {
         T.mode = 'explain';
     }
+    // у доски — только если доска рядом (иначе преподаватель «писал» рукой в воздух, стоя лицом к двери)
+    if (T.mode === 'board' && !(sp.board && Math.hypot(sp.board[0] - n.x, sp.board[1] - n.y) < 1.6))
+        T.mode = 'explain';
     if (T.mode === 'board' && sp.board) {
         n.a = lerpAng(n.a, Math.atan2(sp.board[1] - n.y, sp.board[0] - n.x), Math.min(1, dt * 30));
         n.sub = 'board';
@@ -3446,26 +3459,27 @@ function poseNPC__base(n, i, vis) {
         T.torsoY = 0;
         T.hipX = 0;
         T.ftL = T.ftR = v > 0.1 ? 0.5 : 0;
-        T.uaL = T.uaR = -0.5;
-        T.faL = T.faR = -1.0;
+        T.uaL = T.uaR = -0.55;
+        T.faL = T.faR = -1.3;
         T.uaLz = 0.12;
         T.uaRz = -0.12;
-        freeHead = true;
+        freeHead = true; // предплечья лежат на парте, а не уходят в неё
         if (sub === 'type') {
-            T.faL = -1.2 + Math.sin(st * 22 + sd) * 0.05;
-            T.faR = -1.2 + Math.sin(st * 19 + 1) * 0.05;
+            T.uaL = T.uaR = -0.52;
+            T.faL = -1.45 + Math.sin(st * 22 + sd) * 0.05;
+            T.faR = -1.45 + Math.sin(st * 19 + 1) * 0.05;
             T.headP = 0.2 + Math.sin(st * 0.6 + sd) * 0.08;
             T.torsoP = 0.12;
             freeHead = false;
         }
         else if (sub === 'write') {
-            T.faR = -1.18 + Math.sin(st * 9) * 0.05;
-            T.uaR = -0.62;
+            T.faR = -1.42 + Math.sin(st * 9) * 0.05;
+            T.uaR = -0.68;
             T.headP = 0.42;
             T.torsoP = 0.2;
             T.headY = -0.12;
-            T.uaL = -0.55;
-            T.faL = -1.0;
+            T.uaL = -0.6;
+            T.faL = -1.35;
             freeHead = Math.sin(st * 0.5 + sd) > 0.72;
             if (freeHead) {
                 T.torsoP = 0.1;
@@ -4381,9 +4395,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
     stela.add(base, plate);
     stela.position.set(sx, OUTZ, -sy);
     stela.rotation.y = Math.PI / 2;
-    base.castShadow = plate.castShadow = true;
-    scene.add(stela);
-    blockRect(sx, sy, 0.9, 4.6, 0);
+    base.castShadow = plate.castShadow = true; // синяя стела у ворот убрана по просьбе владельца
     // флаг Кыргызстана
     const fc = document.createElement('canvas');
     fc.width = 500;
@@ -9880,6 +9892,22 @@ function campusChairs() {
     for (const [geo, mat] of [[merge(wood), wm], [merge(metal), mm]]) {
         const im = new THREE.InstancedMesh(geo, mat, src.count);
         im.instanceMatrix.copy(src.instanceMatrix);
+        // в компьютерных классах уже стоят синие офисные кресла — деревянный стул там лишний (было по два стула на место)
+        {
+            const m4 = new THREE.Matrix4(), p = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+            for (let i = 0; i < src.count; i++) {
+                src.getMatrixAt(i, m4);
+                m4.premultiply(src.matrixWorld);
+                p.setFromMatrixPosition(m4);
+                let ri = -1;
+                for (let rr2 = 0; rr2 <= 1.2 && ri < 0; rr2 += 0.2)
+                    for (let a = 0; a < 8 && ri < 0; a++)
+                        ri = roomAt(2, p.x + Math.cos(a * 0.785) * rr2, -p.z + Math.sin(a * 0.785) * rr2);
+                const r = ROOMS[ri];
+                if (r && r.kind === 'pc')
+                    im.setMatrixAt(i, zero);
+            }
+        }
         im.instanceMatrix.needsUpdate = true;
         im.frustumCulled = false;
         im.matrixAutoUpdate = false;
@@ -9892,6 +9920,45 @@ function campusChairs() {
     }
     groups.forEach(o => { o.visible = false; const i = furnObjs.indexOf(o); if (i >= 0)
         furnObjs.splice(i, 1); });
+}
+// ---------- места за столами в кабинетах: садиться на кресло, а не рядом с ним (ноги проходили сквозь тумбу стола) ----------
+function campusSeats() {
+    const ch = [];
+    const m = new THREE.Matrix4();
+    storeyG[2].children.forEach((o) => {
+        if (!o.userData.dbg || o.userData.dbg[0] !== 'armchair')
+            return;
+        const c = o.isInstancedMesh ? o.count : 1;
+        o.geometry.computeBoundingBox();
+        for (let i = 0; i < c; i++) {
+            if (o.isInstancedMesh)
+                o.getMatrixAt(i, m);
+            else
+                m.identity();
+            m.premultiply(o.matrixWorld);
+            const b = o.geometry.boundingBox.getCenter(new THREE.Vector3()).applyMatrix4(m);
+            ch.push({ x: b.x, y: -b.z, used: false });
+        }
+    });
+    const office = SEATS.filter(s => s.f === 2 && s.office);
+    const near = (s, c) => Math.hypot(c.x - s.p[0], c.y - s.p[1]);
+    office.forEach(s => { const c = ch.find(c => near(s, c) < 0.25); if (c)
+        c.used = true; });
+    office.forEach(s => {
+        if (ch.some(c => near(s, c) < 0.25))
+            return;
+        let best = null, bd = 4;
+        ch.forEach(c => { if (c.used)
+            return; const d = near(s, c); if (d < bd) {
+            bd = d;
+            best = c;
+        } });
+        if (best) {
+            best.used = true;
+            s.p[0] = best.x;
+            s.p[1] = best.y;
+        }
+    });
 }
 // ---------- 8. общежитие через ул. Раззакова ----------
 function campusDorm() {
@@ -10027,7 +10094,7 @@ function campusFrame() {
     }
 }
 function buildCampus() {
-    const steps = [['facade', campusFacade], ['ac', campusAC], ['interior', campusInterior], ['chairs', campusChairs], ['dorm', campusDorm], ['ui', campusUI]];
+    const steps = [['facade', campusFacade], ['ac', campusAC], ['interior', campusInterior], ['chairs', campusChairs], ['seats', campusSeats], ['dorm', campusDorm], ['ui', campusUI]];
     for (const [n, f] of steps) {
         try {
             f();
@@ -10158,7 +10225,7 @@ function azPrepMats(scene) {
         const ms = Array.isArray(o.material) ? o.material : [o.material];
         ms.forEach((m) => { if (m.map)
             m.map.anisotropy = 4; if (/hair|brow|lash/i.test(m.name)) {
-            m.alphaTest = 0.5;
+            m.alphaTest = 0.3;
             m.transparent = false;
             m.side = THREE.DoubleSide;
         } });

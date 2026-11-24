@@ -266,8 +266,7 @@ bool nb(vec2 a, vec2 b){ return any(greaterThan(abs(brickOf(a) - b), vec2(0.5)))
   const stela = new THREE.Group();
   const base = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.5, 0.7), new THREE.MeshStandardMaterial({ color: 0x6d6a66, roughness: 0.9 })); base.position.y = 0.25;
   const plate = new THREE.Mesh(new THREE.BoxGeometry(4.1, 1.2, 0.18), [0, 0, 0, 0, 1, 1].map(k => k ? new THREE.MeshStandardMaterial({ map: stT, roughness: 0.5 }) : new THREE.MeshStandardMaterial({ color: 0x1d3f73 }))); plate.position.y = 1.15;
-  stela.add(base, plate); stela.position.set(sx, OUTZ, -sy); stela.rotation.y = Math.PI / 2; base.castShadow = plate.castShadow = true; scene.add(stela);
-  blockRect(sx, sy, 0.9, 4.6, 0);
+  stela.add(base, plate); stela.position.set(sx, OUTZ, -sy); stela.rotation.y = Math.PI / 2; base.castShadow = plate.castShadow = true;   // синяя стела у ворот убрана по просьбе владельца
   // флаг Кыргызстана
   const fc = document.createElement('canvas'); fc.width = 500; fc.height = 300; const fg = fc.getContext('2d');
   fg.fillStyle = '#e8112d'; fg.fillRect(0, 0, 500, 300); fg.save(); fg.translate(250, 150); fg.fillStyle = '#ffef00';

@@ -237,9 +237,9 @@ function poseNPC__base(n, i, vis) {
   if (sit) {
     const v = n.sitV || 0;
     T.thL = -1.5 + v * 0.06; T.thR = -1.5 - v * 0.06; T.shL = 1.45 + v * 0.9; T.shR = 1.45 + v * 0.5; T.hipY = (n.seatH ?? 0.46) / k + 0.035; T.torsoP = 0.07; T.torsoY = 0; T.hipX = 0; T.ftL = T.ftR = v > 0.1 ? 0.5 : 0;
-    T.uaL = T.uaR = -0.5; T.faL = T.faR = -1.0; T.uaLz = 0.12; T.uaRz = -0.12; freeHead = true;
-    if (sub === 'type') { T.faL = -1.2 + Math.sin(st * 22 + sd) * 0.05; T.faR = -1.2 + Math.sin(st * 19 + 1) * 0.05; T.headP = 0.2 + Math.sin(st * 0.6 + sd) * 0.08; T.torsoP = 0.12; freeHead = false; }
-    else if (sub === 'write') { T.faR = -1.18 + Math.sin(st * 9) * 0.05; T.uaR = -0.62; T.headP = 0.42; T.torsoP = 0.2; T.headY = -0.12; T.uaL = -0.55; T.faL = -1.0; freeHead = Math.sin(st * 0.5 + sd) > 0.72; if (freeHead) { T.torsoP = 0.1; } }
+    T.uaL = T.uaR = -0.55; T.faL = T.faR = -1.3; T.uaLz = 0.12; T.uaRz = -0.12; freeHead = true;   // предплечья лежат на парте, а не уходят в неё
+    if (sub === 'type') { T.uaL = T.uaR = -0.52; T.faL = -1.45 + Math.sin(st * 22 + sd) * 0.05; T.faR = -1.45 + Math.sin(st * 19 + 1) * 0.05; T.headP = 0.2 + Math.sin(st * 0.6 + sd) * 0.08; T.torsoP = 0.12; freeHead = false; }
+    else if (sub === 'write') { T.faR = -1.42 + Math.sin(st * 9) * 0.05; T.uaR = -0.68; T.headP = 0.42; T.torsoP = 0.2; T.headY = -0.12; T.uaL = -0.6; T.faL = -1.35; freeHead = Math.sin(st * 0.5 + sd) > 0.72; if (freeHead) { T.torsoP = 0.1; } }
     else if (sub === 'phone') { T.uaR = -0.3; T.faR = -1.7; T.headP = 0.55; T.uaL = -0.3; T.faL = -1.3; T.torsoP = 0.16; freeHead = false; }
     else if (sub === 'hand') { T.uaR = -3.0; T.faR = -0.12; T.uaRz = -0.12; T.torsoP = 0.0; }
     else if (sub === 'talk') { T.headY = n.talkSide || 0.6; T.torsoY = (n.talkSide || 0.6) * 0.35; T.faR = -1.3 + Math.sin(st * 6) * 0.15; freeHead = false; }

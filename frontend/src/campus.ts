@@ -277,10 +277,30 @@ function campusChairs() {
   const wm = new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex, roughness: 0.55 }), mm = new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.35, metalness: 0.6 });
   const src = groups[0];
   for (const [geo, mat] of [[merge(wood), wm], [merge(metal), mm]] as any) {
-    const im = new THREE.InstancedMesh(geo, mat, src.count); im.instanceMatrix.copy(src.instanceMatrix); im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.matrixAutoUpdate = false; im.matrix.copy(src.matrix);
+    const im = new THREE.InstancedMesh(geo, mat, src.count); im.instanceMatrix.copy(src.instanceMatrix);
+    // в компьютерных классах уже стоят синие офисные кресла — деревянный стул там лишний (было по два стула на место)
+    { const m4 = new THREE.Matrix4(), p = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0); for (let i = 0; i < src.count; i++) { src.getMatrixAt(i, m4); m4.premultiply(src.matrixWorld); p.setFromMatrixPosition(m4); let ri = -1; for (let rr2 = 0; rr2 <= 1.2 && ri < 0; rr2 += 0.2) for (let a = 0; a < 8 && ri < 0; a++) ri = roomAt(2, p.x + Math.cos(a * 0.785) * rr2, -p.z + Math.sin(a * 0.785) * rr2); const r = ROOMS[ri]; if (r && r.kind === 'pc') im.setMatrixAt(i, zero); } }
+    im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.matrixAutoUpdate = false; im.matrix.copy(src.matrix);
     im.castShadow = true; im.receiveShadow = true; im.userData = { ...src.userData }; storeyG[2].add(im); furnObjs.push(im);
   }
   groups.forEach(o => { o.visible = false; const i = furnObjs.indexOf(o); if (i >= 0) furnObjs.splice(i, 1); });
+}
+
+// ---------- места за столами в кабинетах: садиться на кресло, а не рядом с ним (ноги проходили сквозь тумбу стола) ----------
+function campusSeats() {
+  const ch = []; const m = new THREE.Matrix4();
+  storeyG[2].children.forEach((o: any) => {
+    if (!o.userData.dbg || o.userData.dbg[0] !== 'armchair') return; const c = o.isInstancedMesh ? o.count : 1; o.geometry.computeBoundingBox();
+    for (let i = 0; i < c; i++) { if (o.isInstancedMesh) o.getMatrixAt(i, m); else m.identity(); m.premultiply(o.matrixWorld); const b = o.geometry.boundingBox.getCenter(new THREE.Vector3()).applyMatrix4(m); ch.push({ x: b.x, y: -b.z, used: false }); }
+  });
+  const office = SEATS.filter(s => s.f === 2 && s.office);
+  const near = (s, c) => Math.hypot(c.x - s.p[0], c.y - s.p[1]);
+  office.forEach(s => { const c = ch.find(c => near(s, c) < 0.25); if (c) c.used = true; });
+  office.forEach(s => {
+    if (ch.some(c => near(s, c) < 0.25)) return;
+    let best = null, bd = 4; ch.forEach(c => { if (c.used) return; const d = near(s, c); if (d < bd) { bd = d; best = c; } });
+    if (best) { best.used = true; s.p[0] = best.x; s.p[1] = best.y; }
+  });
 }
 
 // ---------- 8. общежитие через ул. Раззакова ----------
@@ -352,7 +372,7 @@ function campusFrame() {
 }
 
 function buildCampus() {
-  const steps: [string, () => void][] = [['facade', campusFacade], ['ac', campusAC], ['interior', campusInterior], ['chairs', campusChairs], ['dorm', campusDorm], ['ui', campusUI]];
+  const steps: [string, () => void][] = [['facade', campusFacade], ['ac', campusAC], ['interior', campusInterior], ['chairs', campusChairs], ['seats', campusSeats], ['dorm', campusDorm], ['ui', campusUI]];
   for (const [n, f] of steps) { try { f(); } catch (e) { console.error('campus ' + n, e); } }
   // точки во дворе, которые теперь заняты, убираем из списка мест для прогулок
   for (let i = YARD.length - 1; i >= 0; i--) { const [x, y] = YARD[i]; const k = cy(y) * SNX + cx(x); if (GRID[3][k] !== -2) YARD.splice(i, 1); }

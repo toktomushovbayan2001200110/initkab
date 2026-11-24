@@ -355,14 +355,17 @@ function buildScreens() {
   PCS.forEach((p, i) => {
     const [x0, y0, z0, x1, y1, z1] = p.bb; const sx = x1 - x0, sy = y1 - y0, sz = z1 - z0;
     // в какую сторону смотрит экран: к стулу, который на него смотрит
-    const seat = SEATS.find(s => s.pc === p.id);
+    let seat = SEATS.find(s => s.pc === p.id);
+    // у iMac в IT-отделе место может быть не привязано: берём ближайший стул, иначе экран смотрел в стену и висел позади монитора
+    if (!seat || Math.hypot(seat.p[0] - p.c[0], seat.p[1] - p.c[1]) > 2) { let bd = 1.6; SEATS.forEach(s => { if (s.f !== p.f) return; const d = Math.hypot(s.p[0] - p.c[0], s.p[1] - p.c[1]); if (d < bd) { bd = d; seat = s; } }); }
     const tx = seat ? seat.p[0] : roomById(p.room)?.c[0] ?? p.c[0], ty = seat ? seat.p[1] : roomById(p.room)?.c[1] ?? p.c[1];
     let nx, ny, wdt;
     if (sx < sy) { nx = Math.sign(tx - p.c[0]) || 1; ny = 0; wdt = sy; } else { nx = 0; ny = Math.sign(ty - p.c[1]) || 1; wdt = sx; }
     const thick = Math.min(sx, sy);
     const hgt = p.imac ? sz * 0.62 : Math.min(sz * 0.62, wdt * 0.62);
     const zc = z1 - hgt / 2 - sz * 0.05;
-    const px = p.c[0] + nx * (thick / 2 + 0.006), py = p.c[1] + ny * (thick / 2 + 0.006);
+    const off = p.imac ? 0.055 : thick / 2 + 0.006;
+    const px = p.c[0] + nx * off, py = p.c[1] + ny * off;
     p.screen = { x: px, y: py, z: zc, w: wdt * 0.9, h: hgt, nx, ny };
     p.state = 0; p.tile = 0; p.user = null; p.err = false;
   });
@@ -957,6 +960,8 @@ function teachBehaviour__base(n, T, dt) {
   }
   T.path = null; n.walk = Math.max(0, n.walk - dt * 5); n.pose = 'stand';
   if (T.mode === 'back') { T.mode = 'explain'; }
+  // у доски — только если доска рядом (иначе преподаватель «писал» рукой в воздух, стоя лицом к двери)
+  if (T.mode === 'board' && !(sp.board && Math.hypot(sp.board[0] - n.x, sp.board[1] - n.y) < 1.6)) T.mode = 'explain';
   if (T.mode === 'board' && sp.board) { n.a = lerpAng(n.a, Math.atan2(sp.board[1] - n.y, sp.board[0] - n.x), Math.min(1, dt * 30)); n.sub = 'board'; }
   else { n.a = lerpAng(n.a, sp.a + Math.PI, Math.min(1, dt * 30)); n.sub = T.mode === 'desk' ? 'arms' : 'explain'; }
   // отвечаем на поднятую руку

@@ -86,7 +86,7 @@ function azPrepMats(scene: any) {
     o.castShadow = /body|vest|shirt|pants|jean|trouser|hoodie|sweater|jacket|blazer|cardigan|skirt/i.test(o.name + (o.material && o.material.name));
     o.receiveShadow = false;
     const ms = Array.isArray(o.material) ? o.material : [o.material];
-    ms.forEach((m: any) => { if (m.map) m.map.anisotropy = 4; if (/hair|brow|lash/i.test(m.name)) { m.alphaTest = 0.5; m.transparent = false; m.side = THREE.DoubleSide; } });
+    ms.forEach((m: any) => { if (m.map) m.map.anisotropy = 4; if (/hair|brow|lash/i.test(m.name)) { m.alphaTest = 0.3; m.transparent = false; m.side = THREE.DoubleSide; } });
   });
 }
 function azLoad() {
