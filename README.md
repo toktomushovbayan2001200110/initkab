@@ -17,7 +17,20 @@
 
 Люди из базы появляются в модели с настоящими именами. События из пульта за несколько секунд видят все, у кого открыта модель.
 
-## Запуск на своём компьютере
+## Запуск в Docker (Postgres)
+
+Нужен Docker Desktop.
+
+```bash
+docker compose up -d --build
+docker compose exec web python manage.py seed             # примерные группы и студенты
+docker compose exec web python manage.py createsuperuser  # логин и пароль директора
+```
+
+Откройте http://localhost:8000/. База — Postgres 16 в контейнере `db` (данные в томе `pgdata`, порт 5432).
+Пароль базы по умолчанию `initkab-local`, свой можно задать переменной `POSTGRES_PASSWORD` в файле `.env`.
+
+## Запуск на своём компьютере без Docker
 
 Нужен Python 3.10 или новее.
 
