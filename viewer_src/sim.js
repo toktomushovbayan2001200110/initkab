@@ -786,7 +786,7 @@ function teachBehaviour(n, T, dt) {
     if (!T.wp) { const ss = seatsIn(T.room.id).filter(s => s.occ && s.occ.role === 'student'); const s = ss.length ? pick(ss) : null; if (s) { const q = nearestPass(T.room.f, s.p[0] - Math.cos(s.a) * 0.7, s.p[1] - Math.sin(s.a) * 0.7, 6); if (q) T.wp = { x: wx(q[0]), y: wy(q[1]), s }; } if (!T.wp) T.wp = { x: sp.x, y: sp.y }; }
     if (!T.path) { T.path = floorPath(T.room.f, n.x, n.y, T.wp.x, T.wp.y) || []; T.pi = 0; }
     if (T.pi < T.path.length) { const p = T.path[T.pi]; const dx = p.x - n.x, dy = p.y - n.y, d = Math.hypot(dx, dy); const st = n.speed * 0.6 * dt; if (d <= st) { n.x = p.x; n.y = p.y; T.pi++; } else { n.x += dx / d * st; n.y += dy / d * st; n.a = lerpAng(n.a, Math.atan2(dy, dx), Math.min(1, dt * 10)); } n.walk = Math.min(0.7, n.walk + dt * 4); n.phase += aph(dt) * n.speed * 3.4; }
-    else { n.walk = Math.max(0, n.walk - dt * 5); n.sub = 'explain'; if (T.wp.s) { n.a = lerpAng(n.a, Math.atan2(T.wp.s.p[1] - n.y, T.wp.s.p[0] - n.x), dt * 20); const st = T.wp.s.occ; if (st && st.gameMode && chance(0.3)) { say(n, 'Закрой игру!'); st.gameMode = false; } } }
+    else { n.walk = Math.max(0, n.walk - dt * 5); n.sub = 'explain'; if (T.wp.s) { n.a = lerpAng(n.a, Math.atan2(T.wp.s.p[1] - n.y, T.wp.s.p[0] - n.x), Math.min(1, dt * 20)); const st = T.wp.s.occ; if (st && st.gameMode && chance(0.3)) { say(n, 'Закрой игру!'); st.gameMode = false; } } }
     if (simT >= T.modeUntil - 0.3) { T.path = null; T.mode = 'back'; T.modeUntil = simT + 2; }
     return;
   }
@@ -798,8 +798,8 @@ function teachBehaviour(n, T, dt) {
   }
   T.path = null; n.walk = Math.max(0, n.walk - dt * 5); n.pose = 'stand';
   if (T.mode === 'back') { T.mode = 'explain'; }
-  if (T.mode === 'board' && sp.board) { n.a = lerpAng(n.a, Math.atan2(sp.board[1] - n.y, sp.board[0] - n.x), dt * 30); n.sub = 'board'; }
-  else { n.a = lerpAng(n.a, sp.a + Math.PI, dt * 30); n.sub = T.mode === 'desk' ? 'arms' : 'explain'; }
+  if (T.mode === 'board' && sp.board) { n.a = lerpAng(n.a, Math.atan2(sp.board[1] - n.y, sp.board[0] - n.x), Math.min(1, dt * 30)); n.sub = 'board'; }
+  else { n.a = lerpAng(n.a, sp.a + Math.PI, Math.min(1, dt * 30)); n.sub = T.mode === 'desk' ? 'arms' : 'explain'; }
   // отвечаем на поднятую руку
   const hand = seatsIn(T.room.id).find(s => s.occ && s.occ.sub === 'hand');
   if (hand && chance(0.02)) { say(n, pick(['Да, слушаю', 'Правильно!', 'Хороший вопрос', 'Почти, подумай ещё'])); hand.occ.sub = 'listen'; }
