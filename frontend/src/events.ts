@@ -673,7 +673,7 @@ function sndFrame(dt) {
   for (const n of NPCS) { if (!n.spawned || n.hidden) continue; if (fpvF != null && n.f !== fpvF) continue; const d = Math.hypot(n.x - (FPV.on ? FPV.x : X), n.y - (FPV.on ? FPV.y : Y)); if (d > 22) continue; const w = 1 - d / 22; const T = n.tasks[0]; if (n.sub === 'talk' || (T && (T.t === 'chat' || T.t === 'queue'))) chat += w; else if (!(T && T.t === 'sit' && T.kind === 'lesson')) chat += w * 0.25; if (n.sub === 'type') typing += w; if (n.f === 3) out += w; }
   const crowd = Math.min(1, chat / 14) * near;
   SND.voices.forEach((v, i) => { v.g.gain.setTargetAtTime(crowd * (0.11 + i * 0.015), SND.C.currentTime, 0.4); });
-  const el = sunPos(simT).el; const roadNear = Math.max(0, 1 - Math.min(Math.abs(X - -36), Math.abs(Y - -90)) / 45);
+  const el = sunPos(simT).el; const roadNear = Math.max(0, 1 - Math.min(Math.abs(X - -36), Math.abs(Y - STR.TK)) / 45);
   SND.road.gain.setTargetAtTime((0.05 + roadNear * 0.08) * (simT > 360 && simT < 1380 ? 1 : 0.3) * Math.min(1, near * 1.5), SND.C.currentTime, 0.6);
   SND.keyAcc += dt * typing * 2.2 * near; while (SND.keyAcc > 1) { SND.keyAcc -= 1; sndClick(0.05 + Math.random() * 0.06); }
   const season = seasonOf(SUN.doy); const outdoor = !FPV.on ? camera.position.y > 4 || curFloor === 'all' : FPV.f === 3;

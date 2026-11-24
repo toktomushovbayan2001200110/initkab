@@ -8,7 +8,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const read = (p) => readFileSync(join(root, p), 'utf8');
 
 // Порядок важен: все файлы — один общий <script>, модули оборачивают функции предыдущих.
-export const ORDER = ['hooks', 'core', 'sim', 'people', 'world', 'events', 'design', 'brain', 'doors', 'campus', 'azamat', 'main'];
+export const ORDER = ['hooks', 'core', 'sim', 'people', 'osm', 'world', 'events', 'design', 'brain', 'doors', 'campus', 'azamat', 'main'];
 
 const app = ORDER.map((m) => `// ---- ${m}.ts ----\n` + read(`build/${m}.js`)).join('\n');
 if (app.includes('</script')) throw new Error('В коде встретилось </script — сломает HTML');

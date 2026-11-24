@@ -16,6 +16,8 @@ function designTex() {
   // растягиваем помещения до лица стены (сетка навигации отступает от стен ~0,75 м)
   for (let step = 1; step <= 5; step++) { const nq = []; for (const k of q) { const i = k % SNX; for (const m of [i > 0 ? k - 1 : -1, i < SNX - 1 ? k + 1 : -1, k - SNX, k + SNX]) if (m >= 0 && m < n && G[m] === -1) { G[m] = G[k]; nq.push(m); } } q = nq; }
   for (let k = 0; k < n; k++) { const v = G[k]; if (v < 0) continue; const r = ROOMS[v]; if (!r) continue; const [R, Gc, B] = hexRGB(roomAccent(r)); d[k * 4] = R; d[k * 4 + 1] = Gc; d[k * 4 + 2] = B; d[k * 4 + 3] = r.kind === 'corridor' ? 128 : r.kind === 'pc' ? 200 : r.kind === 'wc' ? 90 : 255; }
+  // лестничные клетки: без цветной полосы и панелей (полоса на 1,1 м над площадкой резала лестничный марш по диагонали)
+  STAIRS.forEach(st => { if (st.f < 1) return; const b = st.bb, m = 0.8; for (let j = cy(b[1] - m); j <= cy(b[3] + m); j++) for (let i = cx(b[0] - m); i <= cx(b[2] + m); i++) if (i >= 0 && j >= 0 && i < SNX && j < SNY) d[(j * SNX + i) * 4 + 3] = 0; });
   // двери (-2) и тонкие стены: берём ближайшее помещение, чтобы цвет не «рвался» у проёмов
   const cd = new Uint8Array(n * 4); for (let k = 0; k < n; k++) if (G0[k] >= 0 || G0[k] === -2) cd[k * 4] = 255;
   CTEX = new THREE.DataTexture(cd, SNX, SNY, THREE.RGBAFormat); CTEX.magFilter = CTEX.minFilter = THREE.NearestFilter; CTEX.needsUpdate = true;

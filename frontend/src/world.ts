@@ -21,18 +21,17 @@ function sunPos(t) {   // возвращает высоту (°) и направ
 
 // ---------- ресурсы двора ----------
 const CITY: any = {
-  // [x0, x1, y0, y1] в координатах симуляции (x — восток, y — север), по карте OSM вокруг ул. Раззакова 51
-  roads: [[-44, -35.5, -300, 300, 'Раззакова', 'S'], [-300, 300, -97, -83, 'Токтогула', 'W'], [72, 79, -300, 300, 'Эркиндик', 'S'], [134, 141, -300, 300, 'Эркиндик', 'N'], [-300, 300, 131, 139, 'Киевская', 'E']],
-  walks: [[-48, -44, -300, 300], [-35.5, -31.3, -300, 300], [-300, 300, -100, -97], [-300, 300, -83, -79.5], [69, 72, -300, 300], [141, 144, -300, 300], [-300, 300, 128, 131], [-300, 300, 139, 142]],
-  blocks: [
-    [40, 58, -54, 7, 12, 0xd9ccb2, 'Дипакадемия МИД'], [44, 60, -62, -79, 7, 0xcbb89c], [29, 66, 37, 52, 13, 0xe6dac4, 'КГУ'], [-14, 8, 99, 124, 16, 0xe6dac4, 'КГУ'], [44, 66, 86, 104, 13, 0xe6dac4], [20, 54, -62, -77, 7, 0xd6cfc4],
-    [-84, -58, 8, 46, 12, 0xd8c7a8, 'Лицей №3'], [-66, -52, -34, 2, 15, 0xe8dcc0, 'Общежитие'], [-80, -62, -44, -74, 15, 0xb9c3c9], [-125, -95, 55, 95, 12, 0xd0bfa4], [-125, -95, -30, 20, 9, 0xcfc8bb],
-    [-28, 40, -108, -140, 16, 0xd4c6ae], [-80, -52, -106, -128, 9, 0xc9bfae], [150, 176, 40, 82, 12, 0xd6c9b4], [150, 172, -22, 22, 9, 0xc4cdd0], [148, 182, -58, -80, 10, 0xd2c3a8], [150, 180, 100, 125, 14, 0xcbbca4],
-    [-80, -50, 60, 120, 15, 0xd0c4ae], [60, 70, 145, 175, 10, 0xd8cbb4], [-20, 30, 146, 180, 18, 0xc9c0b0]],
-  field: [-29, 14, -76, -39],
+  // [x0, x1, y0, y1] в координатах симуляции (x — восток, y — север); оси улиц — STR в osm.ts (по OSM и 2ГИС)
+  roads: [[-44, -35.5, -300, 300, 'Раззакова', 'S'], [-300, 300, STR.TK - 7, STR.TK + 7, 'Токтогула', 'W'], [STR.ERW - 3.5, STR.ERW + 3.5, -300, 300, 'Эркиндик', 'S'], [STR.ERE - 3.5, STR.ERE + 3.5, -300, 300, 'Эркиндик', 'N'], [-300, 300, STR.KV - 4, STR.KV + 4, 'Киевская', 'E']],
+  walks: [[-48, -44, -300, 300], [-35.5, -31.3, -300, 300], [-300, 300, STR.TK - 10.5, STR.TK - 7], [-300, 300, STR.TK + 7, STR.TK + 10.5], [STR.ERW - 6.5, STR.ERW - 3.5, -300, 300], [STR.ERE + 3.5, STR.ERE + 6.5, -300, 300], [-300, 300, STR.KV - 7, STR.KV - 4], [-300, 300, STR.KV + 4, STR.KV + 7]],
+  // соседние здания: контур (polygon), bbox для деревьев и т. п.
+  blocks: OSM_RAW.map(([kind, fl, name, addr, poly]) => {
+    const P = poly.map(osmXY); const xs = P.map(p => p[0]), ys = P.map(p => p[1]);
+    return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys), fl * 3.3, kind === 'tower' ? 0xc9cdd2 : kind === 'college' ? 0xd9ccb2 : name === 'КГУ' ? 0xe6dac4 : 0xd2c6b0, name, P, kind, addr];
+  }),
+  field: null,
 };
-// у части домов y0 > y1: коробка выходила вывернутой наизнанку и казалась недостроенной
-CITY.blocks.forEach(b => { if (b[0] > b[1]) [b[0], b[1]] = [b[1], b[0]]; if (b[2] > b[3]) [b[2], b[3]] = [b[3], b[2]]; });
+{ const P = OSM_PITCH.map(osmXY); const xs = P.map(p => p[0]), ys = P.map(p => p[1]); CITY.field = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]; }
 const W: any = { lampMats: [], lights: [], flag: null, stars: null, mts: [], glass: [], amb: null, treeCrowns: [], grassMats: [] };
 const C = (h) => new THREE.Color(h);
 function seasonOf(doy) { const m = new Date(Date.UTC(2026, 0, doy)).getUTCMonth(); return m <= 1 || m === 11 ? 'winter' : m <= 3 ? 'spring' : m <= 7 ? 'summer' : m === 8 ? 'early' : 'autumn'; }
@@ -414,18 +413,18 @@ function buildTraffic() {
     g.traverse((o: any) => { if (o.isMesh) o.castShadow = true; }); scene.add(g); return g;
   };
   // маршруты: Раззакова (на юг), Токтогула (на запад, 2 полосы), Эркиндик (юг/север), Киевская (на восток)
-  const R = [{ x: -40.5, y: 300, dx: 0, dy: -1, n: 5 }, { x: 300, y: -87, dx: -1, dy: 0, n: 6, stop: -5 }, { x: 300, y: -92.5, dx: -1, dy: 0, n: 5 }, { x: 75.5, y: 300, dx: 0, dy: -1, n: 4, stop: -40 }, { x: 137.5, y: -300, dx: 0, dy: 1, n: 4 }, { x: -300, y: 135, dx: 1, dy: 0, n: 3 }];
+  const R = [{ x: -40.5, y: 300, dx: 0, dy: -1, n: 5 }, { x: 300, y: STR.TK + 3, dx: -1, dy: 0, n: 6, stop: -5 }, { x: 300, y: STR.TK - 2.5, dx: -1, dy: 0, n: 5 }, { x: STR.ERW, y: 300, dx: 0, dy: -1, n: 4, stop: -40 }, { x: STR.ERE, y: -300, dx: 0, dy: 1, n: 4 }, { x: -300, y: STR.KV, dx: 1, dy: 0, n: 3 }];
   R.forEach((r, ri) => { for (let i = 0; i < r.n * 2; i++) { const bus = r.stop != null && i % 3 === 0; CARS.push({ g: mk(bus), bus, r, s: rr(0, 600), v: bus ? rr(8, 10) : rr(9, 14), stop: 0, stopped: false, active: true }); } });
   // припаркованные машины вдоль Раззакова и у Дипакадемии
-  for (let y = -70; y < 120; y += rr(5.5, 9)) { if (Math.abs(y + 31.4) < 6 || Math.abs(y - 30.2) < 6) continue; const g = mk(false); g.position.set(-43, OUTZ + 0.02, -y); scene.add(g); }
-  for (let y = -48; y < 4; y += rr(5, 7)) { const g = mk(false); g.position.set(64.5, OUTZ + 0.02, -y); g.rotation.y = Math.PI / 2 + (chance(0.5) ? Math.PI : 0); }
+  for (let y = -95; y < 165; y += rr(5.5, 9)) { if (Math.abs(y + 31.4) < 6 || Math.abs(y - 30.2) < 6) continue; const g = mk(false); g.position.set(-43, OUTZ + 0.02, -y); scene.add(g); }
+  for (let y = -40; y < 4; y += rr(5, 7)) { const g = mk(false); g.position.set(60, OUTZ + 0.02, -y); g.rotation.y = Math.PI / 2 + (chance(0.5) ? Math.PI : 0); }
   // остановка маршруток на Токтогула
   const shelter = new THREE.Group();
   const roofS = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 4), new THREE.MeshStandardMaterial({ color: 0x2b5c8a })); roofS.position.y = 2.4;
   const backS = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.8, 4), new THREE.MeshPhysicalMaterial({ color: 0xbfd6e8, transparent: true, opacity: 0.35, roughness: 0.1 })); backS.position.set(-0.75, 1.3, 0);
   const benchS = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, 3), new THREE.MeshStandardMaterial({ color: 0x8a5a34 })); benchS.position.set(-0.45, 0.46, 0);
   shelter.add(roofS, backS, benchS); [-1.9, 1.9].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4), new THREE.MeshStandardMaterial({ color: 0x333 })); p.position.set(-0.7, 1.2, z); shelter.add(p); });
-  shelter.position.set(-5, OUTZ, 81.6); shelter.rotation.y = Math.PI / 2; scene.add(shelter); shelter.traverse((o: any) => { if (o.isMesh) o.castShadow = true; });
+  shelter.position.set(-5, OUTZ, -(STR.TK + 9.2)); shelter.rotation.y = Math.PI / 2; scene.add(shelter); shelter.traverse((o: any) => { if (o.isMesh) o.castShadow = true; });
 }
 // прохожие на тротуарах: город живёт, пока в корпусе идут пары
 const WALKERS: any = { list: [], body: null, head: null, legs: null };
@@ -593,67 +592,68 @@ function buildCity() {
   CITY.walks.forEach(w => flat(w[0], w[1], w[2], w[3], 0xa9a49a, 0.022));
   CITY.roads.forEach((r, i) => flat(r[0], r[1], r[2], r[3], 0x3a3d41, 0.026 + i * 0.001));
   // аллея бульвара Эркиндик: газон + центральная дорожка
-  flat(79, 134, -300, 300, 0x7f8a4f, 0.018); flat(104, 110, -300, 300, 0xb3a98f, 0.024);
+  flat(STR.ERW + 3.5, STR.ERE - 3.5, -300, 300, 0x7f8a4f, 0.018); flat((STR.ERW + STR.ERE) / 2 - 3, (STR.ERW + STR.ERE) / 2 + 3, -300, 300, 0xb3a98f, 0.024);
   // разметка
   const dashes = []; CITY.roads.forEach(r => { const vert = r[1] - r[0] < r[3] - r[2]; const c = vert ? (r[0] + r[1]) / 2 : (r[2] + r[3]) / 2; for (let u = -296; u < 296; u += 6) { const x = vert ? c : u, y = vert ? u : c; if (CITY.roads.some(o => o !== r && x > o[0] && x < o[1] && y > o[2] && y < o[3])) continue; dashes.push([x, y, vert]); } });
   const dm = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.14, 2.6), new THREE.MeshBasicMaterial({ color: 0xdedbd2 }), dashes.length); const m4 = new THREE.Matrix4(), r4 = new THREE.Matrix4();
   dashes.forEach(([x, y, v], i) => { m4.makeRotationX(-Math.PI / 2); if (!v) m4.premultiply(r4.makeRotationY(Math.PI / 2)); m4.setPosition(x, OUTZ + 0.04, -y); dm.setMatrixAt(i, m4); }); scene.add(dm);
   // зебры
   const zebra = []; const zAt = (x, y, vert) => { for (let k = -4; k < 5; k++) zebra.push([vert ? x + k * 0.9 : x, vert ? y : y + k * 0.9, vert]); };
-  zAt(-39.75, -31.4, true); zAt(-39.75, 30.2, true); zAt(-25, -90, false); zAt(75.5, -40, true);
+  zAt(-39.75, -31.4, true); zAt(-39.75, 30.2, true); zAt(-25, STR.TK, false); zAt(STR.ERW, -40, true);
   const zm = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.5, 3.2), new THREE.MeshBasicMaterial({ color: 0xf0eee8 }), zebra.length);
   zebra.forEach(([x, y, v], i) => { m4.makeRotationX(-Math.PI / 2); if (v) m4.premultiply(r4.makeRotationY(Math.PI / 2)); m4.setPosition(x, OUTZ + 0.045, -y); zm.setMatrixAt(i, m4); }); scene.add(zm);
   // соседние здания
   const STYLES: FacadeStyle[] = ['panel', 'brick', 'plaster', 'stalin', 'modern'];
   const ROOFS = [0x3d5a4a, 0x7a3b2e, 0x4a4f57, 0x2f4d6b, 0x6b5a48];
   CITY.blocks.forEach((b, bi) => {
-    const [x0, x1, y0, y1, h, col, name] = b;
+    const [x0, x1, y0, y1, h, col, name, P, kind] = b;
     if (name === 'Общежитие') return; // строится отдельно (campus.ts)
-    const fl = Math.max(1, Math.round(h / 3.2));
-    const style: FacadeStyle = name === 'КГУ' || name === 'Лицей №3' ? 'stalin' : name === 'Дипакадемия МИД' ? 'modern' : STYLES[bi % STYLES.length];
-    const ft = boxTex(fl, col, style, bi + 3);
-    const side = (len: number) => {
-      const map = ft.map.clone(), em = ft.em.clone(); map.needsUpdate = em.needsUpdate = true;
-      map.repeat.set(Math.max(1, Math.round(len / 7)), fl); em.repeat.copy(map.repeat);
-      const m = new THREE.MeshStandardMaterial({ map, roughness: style === 'modern' ? 0.45 : 0.9, metalness: style === 'modern' ? 0.2 : 0 }); m.userData.em = em; return m;
-    };
-    const top = new THREE.MeshStandardMaterial({ color: 0x8b8f93, roughness: 0.95 });
-    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, y1 - y0), [side(y1 - y0), side(y1 - y0), top, top, side(x1 - x0), side(x1 - x0)]);
-    m.position.set((x0 + x1) / 2, OUTZ + h / 2, -(y0 + y1) / 2); m.castShadow = m.receiveShadow = true; scene.add(m);
-    W.cityGlass = W.cityGlass || []; m.material.forEach(mm => { if (mm.map) W.cityGlass.push(mm); });
-    // крыша: у части домов скатная (жесть), у остальных — парапет
-    if (style !== 'modern' && style !== 'panel' && bi % 3 !== 0) {
-      const rf = new THREE.Mesh(new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1).rotateY(Math.PI / 4), new THREE.MeshStandardMaterial({ color: ROOFS[bi % ROOFS.length], roughness: 0.6, metalness: 0.3, flatShading: true }));
-      rf.scale.set(x1 - x0 + 0.8, Math.min(4, (Math.min(x1 - x0, y1 - y0)) * 0.22), y1 - y0 + 0.8);
-      rf.position.set((x0 + x1) / 2, OUTZ + h + rf.scale.y / 2, -(y0 + y1) / 2); rf.castShadow = true; scene.add(rf);
-    } else {
-      const par = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 + 0.3, 0.7, y1 - y0 + 0.3), new THREE.MeshStandardMaterial({ color: new THREE.Color(col).multiplyScalar(0.85), roughness: 0.9 }));
-      par.position.set((x0 + x1) / 2, OUTZ + h + 0.1, -(y0 + y1) / 2); scene.add(par);
-      const box = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 3), top); box.position.set(x0 + (x1 - x0) * 0.3, OUTZ + h + 1.1, -(y0 + (y1 - y0) * 0.6)); box.castShadow = true; scene.add(box);
+    const fl = Math.max(1, Math.round(h / 3.3)); const kgu = name === 'КГУ';
+    const style: FacadeStyle = kgu ? 'plaster' : kind === 'tower' ? 'modern' : name === 'КГУ' || kind === 'school' ? 'stalin' : kind === 'college' ? 'modern' : kind === 'apartments' ? (fl >= 5 ? 'panel' : 'brick') : STYLES[bi % STYLES.length];
+    const ft = boxTex(fl, kgu ? 0xe4d3ae : col, style, bi + 3);
+    // стены: развёртка по периметру, одна текстура «окно × этаж» на каждые 3,5 м и 3,3 м
+    const pos = [], uv = [], n = P.length; let u = 0;
+    for (let i = 0; i < n; i++) {
+      const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
+      const u0 = u / 3.5, u1 = (u + L) / 3.5; u += L;
+      pos.push(a[0], OUTZ, -a[1], c[0], OUTZ, -c[1], c[0], OUTZ + h, -c[1], a[0], OUTZ, -a[1], c[0], OUTZ + h, -c[1], a[0], OUTZ + h, -a[1]);
+      uv.push(u0, 0, u1, 0, u1, fl, u0, 0, u1, fl, u0, fl);
     }
-    // магазины на первом этаже со стороны ближайшей большой улицы
-    if (!name && style !== 'modern') {
-      const near = (CITY.roads as any[]).map(r => ({ r, d: Math.max(r[0] - x1, x0 - r[1], 0) + Math.max(r[2] - y1, y0 - r[3], 0) })).sort((a, b) => a.d - b.d)[0];
-      if (near && near.d < 30) {
-        const r = near.r, vertical = r[1] - r[0] < r[3] - r[2]; const st = shopTex(bi);
-        const len = vertical ? y1 - y0 : x1 - x0; st.repeat.set(Math.max(1, Math.round(len / 10)), 1);
-        const sm = new THREE.Mesh(new THREE.PlaneGeometry(len, 3.2), new THREE.MeshStandardMaterial({ map: st, roughness: 0.7 }));
-        if (vertical) { const east = r[0] > x1; sm.position.set(east ? x1 + 0.03 : x0 - 0.03, OUTZ + 1.6, -(y0 + y1) / 2); sm.rotation.y = east ? Math.PI / 2 : -Math.PI / 2; }
-        else { const north = r[2] > y1; sm.position.set((x0 + x1) / 2, OUTZ + 1.6, north ? -y1 - 0.03 : -y0 + 0.03); sm.rotation.y = north ? 0 : Math.PI; }
-        scene.add(sm);
-      }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); wg.computeVertexNormals();
+    const map = ft.map, em = ft.em; map.needsUpdate = em.needsUpdate = true;
+    const wm = new THREE.MeshStandardMaterial({ map, roughness: style === 'modern' ? 0.45 : 0.9, metalness: style === 'modern' ? 0.2 : 0, side: THREE.DoubleSide }); wm.userData.em = em;
+    const wall = new THREE.Mesh(wg, wm); wall.castShadow = wall.receiveShadow = true; scene.add(wall);
+    W.cityGlass = W.cityGlass || []; W.cityGlass.push(wm);
+    // корпуса КГУ (2-й, 4-й, 5-й): как наш — бежевая штукатурка, коричневый цоколь и скатная коричневая крыша
+    if (kgu) {
+      const pl = []; for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n]; pl.push(a[0], OUTZ, -a[1], c[0], OUTZ, -c[1], c[0], OUTZ + 1.0, -c[1], a[0], OUTZ, -a[1], c[0], OUTZ + 1.0, -c[1], a[0], OUTZ + 1.0, -a[1]); }
+      const plg = new THREE.BufferGeometry(); plg.setAttribute('position', new THREE.Float32BufferAttribute(pl, 3)); plg.computeVertexNormals();
+      const plm = new THREE.Mesh(plg, new THREE.MeshStandardMaterial({ color: 0x4a3328, roughness: 0.9, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 })); scene.add(plm);
+      const rf = new THREE.Mesh(new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1).rotateY(Math.PI / 4), new THREE.MeshStandardMaterial({ color: 0x5a3a2a, roughness: 0.6, metalness: 0.25, flatShading: true }));
+      rf.scale.set(x1 - x0 + 1.0, Math.min(4.5, Math.min(x1 - x0, y1 - y0) * 0.25), y1 - y0 + 1.0); rf.position.set((x0 + x1) / 2, OUTZ + h + rf.scale.y / 2, -(y0 + y1) / 2); rf.castShadow = true; scene.add(rf);
+      return;
     }
+    // плоская крыша с парапетом
+    const shape = new THREE.Shape(P.map(p => new THREE.Vector2(p[0], p[1])));
+    const roofG = new THREE.ShapeGeometry(shape); roofG.rotateX(-Math.PI / 2);
+    const roof = new THREE.Mesh(roofG, new THREE.MeshStandardMaterial({ color: 0x8b8f93, roughness: 0.95, side: THREE.DoubleSide })); roof.position.y = OUTZ + h; roof.receiveShadow = true; scene.add(roof);
+    const ppos = []; for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n]; ppos.push(a[0], OUTZ + h, -a[1], c[0], OUTZ + h, -c[1], c[0], OUTZ + h + 0.6, -c[1], a[0], OUTZ + h, -a[1], c[0], OUTZ + h + 0.6, -c[1], a[0], OUTZ + h + 0.6, -a[1]); }
+    const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(ppos, 3)); pg.computeVertexNormals();
+    scene.add(new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ color: new THREE.Color(col).multiplyScalar(0.85), roughness: 0.9, side: THREE.DoubleSide })));
+    if (x1 - x0 > 12 && y1 - y0 > 12) { const box = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 3), new THREE.MeshStandardMaterial({ color: 0x8b8f93, roughness: 0.95 })); const cx0 = P.reduce((s, p) => s + p[0], 0) / n, cy0 = P.reduce((s, p) => s + p[1], 0) / n; box.position.set(cx0, OUTZ + h + 1.1, -cy0); box.castShadow = true; scene.add(box); }
   });
-  // спортплощадка к югу от корпуса
+  // футбольное поле через ул. Раззакова
   const [fx0, fx1, fy0, fy1] = CITY.field;
   const fc = document.createElement('canvas'); fc.width = 256; fc.height = 512; const g = fc.getContext('2d');
   g.fillStyle = '#3f7d3a'; g.fillRect(0, 0, 256, 512); for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#3a7436' : '#438340'; g.fillRect(0, i * 64, 256, 64); }
   g.strokeStyle = '#f2f2f2'; g.lineWidth = 3; g.strokeRect(12, 12, 232, 488); g.beginPath(); g.moveTo(12, 256); g.lineTo(244, 256); g.stroke(); g.beginPath(); g.arc(128, 256, 36, 0, 7); g.stroke(); g.strokeRect(68, 12, 120, 56); g.strokeRect(68, 444, 120, 56);
   const ft = new THREE.CanvasTexture(fc); ft.encoding = THREE.sRGBEncoding;
-  const field = new THREE.Mesh(new THREE.PlaneGeometry(fx1 - fx0, fy1 - fy0), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.9 })); field.rotation.x = -Math.PI / 2; field.rotation.z = Math.PI / 2;
-  field.geometry = new THREE.PlaneGeometry(fy1 - fy0, fx1 - fx0); field.position.set((fx0 + fx1) / 2, OUTZ + 0.03, -(fy0 + fy1) / 2); field.receiveShadow = true; scene.add(field);
+  const longY = fy1 - fy0 > fx1 - fx0;
+  const field = new THREE.Mesh(longY ? new THREE.PlaneGeometry(fx1 - fx0, fy1 - fy0) : new THREE.PlaneGeometry(fy1 - fy0, fx1 - fx0), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.9 }));
+  field.rotation.x = -Math.PI / 2; if (!longY) field.rotation.z = Math.PI / 2;
+  field.position.set((fx0 + fx1) / 2, OUTZ + 0.03, -(fy0 + fy1) / 2); field.receiveShadow = true; scene.add(field);
   const goalM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
-  [fx0 + 1, fx1 - 1].forEach(x => { const gl = new THREE.Group(); [-1.5, 1.5].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2), goalM); p.position.set(0, 1, z); gl.add(p); }); const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), goalM); cb.rotation.x = Math.PI / 2; cb.position.y = 2; gl.add(cb); gl.position.set(x, OUTZ, -(fy0 + fy1) / 2); gl.traverse(o => o.castShadow = true); scene.add(gl); });
+  (longY ? [fy0 + 1, fy1 - 1] : [fx0 + 1, fx1 - 1]).forEach(v => { const gl = new THREE.Group(); [-1.5, 1.5].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2), goalM); p.position.set(0, 1, z); gl.add(p); }); const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), goalM); cb.rotation.x = Math.PI / 2; cb.position.y = 2; gl.add(cb); if (longY) { gl.rotation.y = Math.PI / 2; gl.position.set((fx0 + fx1) / 2, OUTZ, -v); } else gl.position.set(v, OUTZ, -(fy0 + fy1) / 2); gl.traverse(o => o.castShadow = true); scene.add(gl); });
   // таблички улиц
   const plate = (text, x, y, rotY) => {
     const c = document.createElement('canvas'); c.width = 512; c.height = 110; const q = c.getContext('2d');
@@ -663,6 +663,6 @@ function buildCity() {
     const pm = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.34), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide })); pm.position.y = 2.6;
     gr.add(pole, pm); gr.position.set(x, OUTZ, -y); gr.rotation.y = rotY; scene.add(gr);
   };
-  plate('ул. Раззакова', -34.3, -79.2, Math.PI / 2); plate('ул. Токтогула', -32.5, -81.8, 0); plate('бул. Эркиндик', 70.5, -81.5, Math.PI / 2);
-  plate('ул. Раззакова 51', -32.2, -30.8, Math.PI / 2); plate('ул. Киевская', -34.3, 129.5, 0);
+  plate('ул. Раззакова', -34.3, STR.TK + 10.8, Math.PI / 2); plate('ул. Токтогула', -32.5, STR.TK + 8.2, 0); plate('бул. Эркиндик', STR.ERW - 5, STR.TK + 8.5, Math.PI / 2);
+  plate('ул. Раззакова 51', -32.2, -30.8, Math.PI / 2); plate('ул. Киевская', -34.3, STR.KV - 5.5, 0);
 }

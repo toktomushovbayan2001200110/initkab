@@ -506,14 +506,15 @@ function buildOutdoor() {
   try { blockOutdoorProps(); } catch (e) { console.warn('outdoor props', e); }
   try { buildWallCaps(); } catch (e) { console.warn('wall caps', e); }
 }
-// крышки стен: без верхнего этажа стены сверху выглядели пустыми (две тонкие плоскости)
+// крышки стен: без верхнего этажа стены сверху выглядели пустыми (две тонкие плоскости).
+// Берём верхние рёбра вертикальных граней стен и закрываем щель между парами параллельных граней точно по их контуру
+// (раньше крышки собирались из клеток сетки 0,2 м и выходили ступенчатыми «плитами» шире стен).
 function buildWallCaps() {
   const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), mm = new THREE.Matrix4(), mi = new THREE.Matrix4();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xcfc8ba, roughness: 0.9, side: THREE.DoubleSide });
+  const mat = new THREE.MeshStandardMaterial({ color: 0xd9d4ca, roughness: 0.9, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
   for (let f = 0; f < 3; f++) {
     const g = storeyG[f]; if (!g) continue;
-    const H = new Float32Array(SNX * SNY);
-    const mark = (x, y, h) => { const i = cx(x), j = cy(y); if (i < 0 || j < 0 || i >= SNX || j >= SNY) return; const k = j * SNX + i; if (h > H[k]) H[k] = h; };
+    const E = [];   // верхние рёбра: [x0, y0, x1, y1, z, nx, ny]
     for (const o of g.children as any[]) {
       if (!o.isMesh || !o.userData || o.userData.t !== 'IfcWall') continue;
       const m = o.material; if (!m || m.transparent || /#floor|#ceil|#roof/.test(m.name || '')) continue;
@@ -525,24 +526,41 @@ function buildWallCaps() {
         for (let k = 0; k < triN; k++) {
           const ia = idx ? idx.getX(k * 3) : k * 3, ib = idx ? idx.getX(k * 3 + 1) : k * 3 + 1, ic = idx ? idx.getX(k * 3 + 2) : k * 3 + 2;
           A.fromBufferAttribute(pos, ia).applyMatrix4(mm); B.fromBufferAttribute(pos, ib).applyMatrix4(mm); C.fromBufferAttribute(pos, ic).applyMatrix4(mm);
-          const zt = Math.max(A.z, B.z, C.z), zb = Math.min(A.z, B.z, C.z); if (zt - zb < 1.0) continue;
+          const zt = Math.max(A.z, B.z, C.z), zb = Math.min(A.z, B.z, C.z); if (zt - zb < 0.3) continue;
           const ux = B.x - A.x, uy = B.y - A.y, uz = B.z - A.z, vx = C.x - A.x, vy = C.y - A.y, vz = C.z - A.z;
-          const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const nl = Math.hypot(nx, ny, nz) || 1; if (Math.abs(nz / nl) > 0.2) continue;
-          for (const [P, Q] of [[A, B], [B, C], [C, A]]) { if (Math.max(P.z, Q.z) < zt - 0.05) continue; const L = Math.hypot(Q.x - P.x, Q.y - P.y); for (let d = 0; d <= L; d += 0.08) mark(P.x + (Q.x - P.x) * d / L, P.y + (Q.y - P.y) * d / L, zt); }
+          const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const nl = Math.hypot(nx, ny, nz) || 1; if (Math.abs(nz / nl) > 0.05) continue;
+          for (const [P, Q] of [[A, B], [B, C], [C, A]]) { if (Math.abs(P.z - zt) > 0.005 || Math.abs(Q.z - zt) > 0.005) continue; if (Math.hypot(Q.x - P.x, Q.y - P.y) < 0.02) continue; E.push([P.x, P.y, Q.x, Q.y, zt, nx / nl, ny / nl]); }
         }
       }
     }
-    // заполняем толщину стены между двумя гранями
-    const F = H.slice();
-    for (let j = 2; j < SNY - 2; j++) for (let i = 2; i < SNX - 2; i++) {
-      const k = j * SNX + i; if (H[k]) continue;
-      for (const [d, r] of [[1, 1], [SNX, 1], [1, 2], [SNX, 2]]) {
-        let a = 0, b = 0; for (let t = 1; t <= r; t++) { a = a || H[k - d * t]; b = b || H[k + d * t]; }
-        if (a && b && Math.abs(a - b) < 0.3) { F[k] = Math.max(a, b); break; }
+    // пары параллельных рёбер на одной высоте, смотрящих в разные стороны, на расстоянии толщины стены
+    const P = []; const cell = new Map(); const key = (x, y) => Math.floor(x / 2) + ',' + Math.floor(y / 2);
+    E.forEach((e, i) => { const k = key((e[0] + e[2]) / 2, (e[1] + e[3]) / 2); if (!cell.has(k)) cell.set(k, []); cell.get(k).push(i); });
+    const seen = new Set();
+    E.forEach((e, i) => {
+      const dx = e[2] - e[0], dy = e[3] - e[1], L = Math.hypot(dx, dy), tx = dx / L, ty = dy / L;
+      const cxm = (e[0] + e[2]) / 2, cym = (e[1] + e[3]) / 2; let best = null, bd = 1e9;
+      for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {
+        const lst = cell.get((Math.floor(cxm / 2) + a) + ',' + (Math.floor(cym / 2) + b)); if (!lst) continue;
+        for (const j of lst) {
+          if (j === i) continue; const o = E[j]; if (Math.abs(o[4] - e[4]) > 0.02) continue;
+          if (e[5] * o[5] + e[6] * o[6] > -0.95) continue;   // грани смотрят навстречу/врозь
+          const ox = o[2] - o[0], oy = o[3] - o[1], oL = Math.hypot(ox, oy); if (Math.abs(tx * oy - ty * ox) / oL > 0.03) continue;
+          const d = Math.abs((o[0] - e[0]) * -ty + (o[1] - e[1]) * tx); if (d < 0.04 || d > 0.75) continue;
+          // перекрытие проекций
+          const s0 = (o[0] - e[0]) * tx + (o[1] - e[1]) * ty, s1 = (o[2] - e[0]) * tx + (o[3] - e[1]) * ty;
+          const lo = Math.max(0, Math.min(s0, s1)), hi = Math.min(L, Math.max(s0, s1)); if (hi - lo < 0.02) continue;
+          if (d < bd) { bd = d; best = [j, lo, hi, d]; }
+        }
       }
-    }
-    const P = []; const s2 = SR / 2;
-    for (let j = 0; j < SNY; j++) { let i = 0; while (i < SNX) { const h = F[j * SNX + i]; if (!h) { i++; continue; } let e = i; while (e + 1 < SNX && Math.abs(F[j * SNX + e + 1] - h) < 0.02) e++; const x0 = wx(i) - s2, x1 = wx(e) + s2, y0 = wy(j) - s2, y1 = wy(j) + s2, z = h + 0.004; P.push(x0, y0, z, x1, y0, z, x1, y1, z, x0, y0, z, x1, y1, z, x0, y1, z); i = e + 1; } }
+      if (!best) return;
+      const [j, lo, hi] = best; const o = E[j];
+      const pk = Math.min(i, j) + '/' + Math.max(i, j) + '/' + lo.toFixed(2); if (seen.has(pk)) return; seen.add(pk);
+      // нормаль из e к o
+      const sgn = ((o[0] - e[0]) * -ty + (o[1] - e[1]) * tx) > 0 ? 1 : -1; const px = -ty * sgn * bd, py = tx * sgn * bd;
+      const ax = e[0] + tx * lo, ay = e[1] + ty * lo, bx = e[0] + tx * hi, by = e[1] + ty * hi, z = e[4] + 0.002;
+      P.push(ax, ay, z, bx, by, z, bx + px, by + py, z, ax, ay, z, bx + px, by + py, z, ax + px, ay + py, z);
+    });
     if (!P.length) continue;
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.computeVertexNormals();
     const cap = new THREE.Mesh(geo, mat); cap.receiveShadow = true; cap.userData = { t: 'cap', s: f }; g.add(cap);

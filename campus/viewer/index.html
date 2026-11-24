@@ -1558,18 +1558,17 @@ function buildOutdoor() {
         console.warn('wall caps', e);
     }
 }
-// крышки стен: без верхнего этажа стены сверху выглядели пустыми (две тонкие плоскости)
+// крышки стен: без верхнего этажа стены сверху выглядели пустыми (две тонкие плоскости).
+// Берём верхние рёбра вертикальных граней стен и закрываем щель между парами параллельных граней точно по их контуру
+// (раньше крышки собирались из клеток сетки 0,2 м и выходили ступенчатыми «плитами» шире стен).
 function buildWallCaps() {
     const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), mm = new THREE.Matrix4(), mi = new THREE.Matrix4();
-    const mat = new THREE.MeshStandardMaterial({ color: 0xcfc8ba, roughness: 0.9, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xd9d4ca, roughness: 0.9, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
     for (let f = 0; f < 3; f++) {
         const g = storeyG[f];
         if (!g)
             continue;
-        const H = new Float32Array(SNX * SNY);
-        const mark = (x, y, h) => { const i = cx(x), j = cy(y); if (i < 0 || j < 0 || i >= SNX || j >= SNY)
-            return; const k = j * SNX + i; if (h > H[k])
-            H[k] = h; };
+        const E = []; // верхние рёбра: [x0, y0, x1, y1, z, nx, ny]
         for (const o of g.children) {
             if (!o.isMesh || !o.userData || o.userData.t !== 'IfcWall')
                 continue;
@@ -1595,60 +1594,78 @@ function buildWallCaps() {
                     B.fromBufferAttribute(pos, ib).applyMatrix4(mm);
                     C.fromBufferAttribute(pos, ic).applyMatrix4(mm);
                     const zt = Math.max(A.z, B.z, C.z), zb = Math.min(A.z, B.z, C.z);
-                    if (zt - zb < 1.0)
+                    if (zt - zb < 0.3)
                         continue;
                     const ux = B.x - A.x, uy = B.y - A.y, uz = B.z - A.z, vx = C.x - A.x, vy = C.y - A.y, vz = C.z - A.z;
                     const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
                     const nl = Math.hypot(nx, ny, nz) || 1;
-                    if (Math.abs(nz / nl) > 0.2)
+                    if (Math.abs(nz / nl) > 0.05)
                         continue;
                     for (const [P, Q] of [[A, B], [B, C], [C, A]]) {
-                        if (Math.max(P.z, Q.z) < zt - 0.05)
+                        if (Math.abs(P.z - zt) > 0.005 || Math.abs(Q.z - zt) > 0.005)
                             continue;
-                        const L = Math.hypot(Q.x - P.x, Q.y - P.y);
-                        for (let d = 0; d <= L; d += 0.08)
-                            mark(P.x + (Q.x - P.x) * d / L, P.y + (Q.y - P.y) * d / L, zt);
+                        if (Math.hypot(Q.x - P.x, Q.y - P.y) < 0.02)
+                            continue;
+                        E.push([P.x, P.y, Q.x, Q.y, zt, nx / nl, ny / nl]);
                     }
                 }
             }
         }
-        // заполняем толщину стены между двумя гранями
-        const F = H.slice();
-        for (let j = 2; j < SNY - 2; j++)
-            for (let i = 2; i < SNX - 2; i++) {
-                const k = j * SNX + i;
-                if (H[k])
-                    continue;
-                for (const [d, r] of [[1, 1], [SNX, 1], [1, 2], [SNX, 2]]) {
-                    let a = 0, b = 0;
-                    for (let t = 1; t <= r; t++) {
-                        a = a || H[k - d * t];
-                        b = b || H[k + d * t];
-                    }
-                    if (a && b && Math.abs(a - b) < 0.3) {
-                        F[k] = Math.max(a, b);
-                        break;
-                    }
-                }
-            }
+        // пары параллельных рёбер на одной высоте, смотрящих в разные стороны, на расстоянии толщины стены
         const P = [];
-        const s2 = SR / 2;
-        for (let j = 0; j < SNY; j++) {
-            let i = 0;
-            while (i < SNX) {
-                const h = F[j * SNX + i];
-                if (!h) {
-                    i++;
-                    continue;
+        const cell = new Map();
+        const key = (x, y) => Math.floor(x / 2) + ',' + Math.floor(y / 2);
+        E.forEach((e, i) => { const k = key((e[0] + e[2]) / 2, (e[1] + e[3]) / 2); if (!cell.has(k))
+            cell.set(k, []); cell.get(k).push(i); });
+        const seen = new Set();
+        E.forEach((e, i) => {
+            const dx = e[2] - e[0], dy = e[3] - e[1], L = Math.hypot(dx, dy), tx = dx / L, ty = dy / L;
+            const cxm = (e[0] + e[2]) / 2, cym = (e[1] + e[3]) / 2;
+            let best = null, bd = 1e9;
+            for (let a = -2; a <= 2; a++)
+                for (let b = -2; b <= 2; b++) {
+                    const lst = cell.get((Math.floor(cxm / 2) + a) + ',' + (Math.floor(cym / 2) + b));
+                    if (!lst)
+                        continue;
+                    for (const j of lst) {
+                        if (j === i)
+                            continue;
+                        const o = E[j];
+                        if (Math.abs(o[4] - e[4]) > 0.02)
+                            continue;
+                        if (e[5] * o[5] + e[6] * o[6] > -0.95)
+                            continue; // грани смотрят навстречу/врозь
+                        const ox = o[2] - o[0], oy = o[3] - o[1], oL = Math.hypot(ox, oy);
+                        if (Math.abs(tx * oy - ty * ox) / oL > 0.03)
+                            continue;
+                        const d = Math.abs((o[0] - e[0]) * -ty + (o[1] - e[1]) * tx);
+                        if (d < 0.04 || d > 0.75)
+                            continue;
+                        // перекрытие проекций
+                        const s0 = (o[0] - e[0]) * tx + (o[1] - e[1]) * ty, s1 = (o[2] - e[0]) * tx + (o[3] - e[1]) * ty;
+                        const lo = Math.max(0, Math.min(s0, s1)), hi = Math.min(L, Math.max(s0, s1));
+                        if (hi - lo < 0.02)
+                            continue;
+                        if (d < bd) {
+                            bd = d;
+                            best = [j, lo, hi, d];
+                        }
+                    }
                 }
-                let e = i;
-                while (e + 1 < SNX && Math.abs(F[j * SNX + e + 1] - h) < 0.02)
-                    e++;
-                const x0 = wx(i) - s2, x1 = wx(e) + s2, y0 = wy(j) - s2, y1 = wy(j) + s2, z = h + 0.004;
-                P.push(x0, y0, z, x1, y0, z, x1, y1, z, x0, y0, z, x1, y1, z, x0, y1, z);
-                i = e + 1;
-            }
-        }
+            if (!best)
+                return;
+            const [j, lo, hi] = best;
+            const o = E[j];
+            const pk = Math.min(i, j) + '/' + Math.max(i, j) + '/' + lo.toFixed(2);
+            if (seen.has(pk))
+                return;
+            seen.add(pk);
+            // нормаль из e к o
+            const sgn = ((o[0] - e[0]) * -ty + (o[1] - e[1]) * tx) > 0 ? 1 : -1;
+            const px = -ty * sgn * bd, py = tx * sgn * bd;
+            const ax = e[0] + tx * lo, ay = e[1] + ty * lo, bx = e[0] + tx * hi, by = e[1] + ty * hi, z = e[4] + 0.002;
+            P.push(ax, ay, z, bx, by, z, bx + px, by + py, z, ax, ay, z, bx + px, by + py, z, ax + px, ay + py, z);
+        });
         if (!P.length)
             continue;
         const geo = new THREE.BufferGeometry();
@@ -3795,6 +3812,83 @@ function poseNPC__base(n, i, vis) {
     }
 }
 
+// ---- osm.ts ----
+// ================= квартал вокруг корпуса по карте OpenStreetMap (проверено по 2ГИС 24.11.2026) =================
+// Контуры зданий в метрах от точки 74.6050 в.д., 42.8730 с.ш. (x — восток, y — север), этажность из OSM/2ГИС.
+// Сетка улиц в Бишкеке повёрнута примерно на 2,3° по часовой стрелке; поворачиваем так, чтобы Раззакова шла строго на север,
+// и сдвигаем так, чтобы западный фасад корпуса из чертежей совпал с реальным (вдоль тротуара Раззакова).
+// [тип, этажей, название, адрес, контур]
+const OSM_RAW = [
+    ['yes', 9, '', 'Раззакова 33/1', [[-57, -246], [-39, -247], [-36, -248], [-35, -231], [-34, -210], [-33, -193], [-51, -192], [-54, -192]]],
+    ['office', 2, 'Институт геологии НАН КР', 'Эркиндик 30', [[29, -228], [36, -228], [36, -226], [40, -226], [45, -225], [49, -223], [51, -219], [51, -213], [53, -212], [53, -205], [50, -205], [50, -177], [53, -177], [53, -167], [11, -165], [11, -176], [39, -177], [39, -199], [33, -199], [25, -206], [25, -211], [-4, -210], [-4, -202], [-20, -202], [-21, -202], [-21, -226], [-12, -226], [-12, -221], [21, -222], [29, -223]]],
+    ['yes', 5, '', 'Токтогула 96', [[-45, -140], [-31, -140], [-31, -136], [-25, -136], [-25, -138], [-10, -138], [-10, -118], [-24, -118], [-24, -124], [-31, -124], [-31, -121], [-45, -121]]],
+    ['yes', 5, '', 'Токтогула 98', [[15, -141], [29, -141], [29, -138], [36, -138], [36, -140], [49, -140], [50, -122], [37, -122], [37, -127], [29, -127], [30, -125], [16, -124]]],
+    ['yes', 7, 'Агропром', 'Киевская 96б', [[-152, 150], [-172, 161], [-177, 78], [-156, 90], [-154, 111], [-144, 115], [-145, 109], [-140, 110], [-133, 111], [-126, 111], [-122, 111], [-117, 110], [-111, 109], [-107, 109], [-105, 108], [-99, 107], [-99, 112], [-90, 109], [-92, 85], [-73, 70], [-67, 154], [-88, 147], [-89, 130], [-97, 128], [-97, 131], [-104, 131], [-110, 130], [-115, 130], [-121, 130], [-126, 130], [-132, 131], [-139, 134], [-143, 135], [-143, 131], [-153, 135]]],
+    ['yes', 2, '', 'Раззакова 54', [[-113, -206], [-111, -170], [-98, -171], [-100, -207]]],
+    ['yes', 2, '', 'Раззакова 50', [[-105, -220], [-93, -221], [-94, -247], [-107, -247]]],
+    ['dormitory', 5, 'Общежитие', 'Раззакова 62', [[-89, -67], [-105, -67], [-102, -8], [-86, -9]]],
+    ['yes', 2, '', '', [[-115, -26], [-154, -25], [-154, -7], [-115, -8]]],
+    ['apartments', 3, '', 'Эркиндик 34', [[42, -77], [45, -30], [60, -31], [58, -69], [57, -78]]],
+    ['yes', 5, 'КГУ', 'Раззакова 49', [[-38, 109], [-35, 174], [-34, 174], [-17, 173], [-18, 171], [-21, 108]]],
+    ['yes', 3, '', 'Эркиндик 31', [[182, -219], [174, -219], [174, -222], [168, -222], [168, -219], [165, -218], [166, -187], [169, -187], [169, -184], [176, -184], [176, -187], [183, -187], [183, -199], [180, -199], [180, -207], [183, -207]]],
+    ['government', 2, 'Управление статистики', 'Токтогула 97', [[-1, -73], [0, -60], [35, -62], [34, -74], [24, -74], [24, -76], [12, -75], [12, -73]]],
+    ['apartments', 3, '', 'Эркиндик 41', [[182, 59], [171, 60], [171, 57], [166, 57], [169, 116], [185, 116], [185, 111], [182, 111], [182, 101], [184, 100], [184, 92], [182, 93], [181, 82], [184, 82], [183, 74], [181, 74], [180, 64], [183, 64]]],
+    ['yes', 3, 'Госархив', 'Токтогула 105', [[-189, -67], [-188, -41], [-171, -42], [-171, -50], [-149, -51], [-149, -43], [-133, -43], [-134, -69], [-150, -68], [-149, -63], [-172, -63], [-172, -68]]],
+    ['yes', 3, '', 'Киевская 92', [[40, 170], [40, 167], [40, 157], [-1, 159], [-1, 170], [0, 172]]],
+    ['yes', 5, '', 'Токтогула 93', [[306, -79], [306, -65], [299, -65], [286, -64], [185, -60], [184, -74], [286, -78], [285, -90], [298, -91], [298, -79]]],
+    ['yes', 3, '', 'Токтогула 92', [[173, -119], [172, -123], [172, -129], [228, -132], [228, -121]]],
+    ['apartments', 3, '', 'Эркиндик 33', [[170, -131], [169, -171], [157, -171], [158, -131], [164, -131]]],
+    ['yes', 5, '', 'Эркиндик 35', [[185, -60], [172, -59], [174, -17], [187, -17]]],
+    ['yes', 5, '', 'Токтогула 95', [[184, -85], [170, -84], [170, -71], [160, -71], [161, -58], [172, -59], [185, -60], [184, -74]]],
+    ['apartments', 5, '', 'Эркиндик 42', [[60, 237], [72, 236], [75, 236], [73, 202], [59, 202], [59, 204]]],
+    ['commercial', 4, '', 'Чуй 114', [[-36, 316], [-31, 316], [58, 312], [74, 311], [74, 306], [73, 302], [45, 303], [45, 296], [-23, 299], [-26, 235], [-27, 211], [-27, 203], [-36, 204], [-41, 204], [-40, 234], [-36, 311]]],
+    ['yes', 5, 'Элкат', 'Киевская 71', [[-3, 210], [-17, 210], [-27, 211], [-26, 235], [-2, 234]]],
+    ['college', 3, 'Дипакадемия', 'Эркиндик 36', [[47, 28], [65, 27], [65, 19], [61, 19], [59, -2], [63, -2], [62, -16], [44, -14]]],
+    ['yes', 3, '', 'Эркиндик 39', [[187, 55], [202, 54], [201, 25], [187, 26]]],
+    ['school', 3, 'Лицей №3', 'Орозбекова 57', [[-178, 60], [-125, 58], [-107, 58], [-109, 5], [-132, 6], [-131, 21], [-126, 21], [-126, 40], [-179, 42]]],
+    ['university', 3, 'КГУ', 'Раззакова 49а', [[0, 115], [27, 113], [26, 96], [-1, 98]]],
+    ['apartments', 3, '', 'Эркиндик 40', [[73, 168], [73, 165], [71, 130], [62, 130], [56, 131], [57, 154], [50, 155], [51, 166], [51, 170]]],
+    ['university', 3, 'КГУ', 'Раззакова 38', [[10, 60], [11, 74], [62, 72], [62, 57]]],
+    ['apartments', 3, '', '', [[42, 121], [62, 120], [61, 108], [41, 109]]],
+    ['apartments', 3, '', '', [[54, 107], [67, 107], [66, 79], [53, 80]]],
+    ['yes', 2, '', 'Киевская 69', [[2, 217], [3, 217], [40, 216], [40, 205], [39, 202], [2, 203]]],
+    ['yes', 1, '', '', [[-36, -165], [-9, -166], [-10, -189], [-20, -188], [-37, -187]]],
+    ['yes', 3, '', 'Эркиндик 37', [[173, 15], [217, 13], [216, -6], [172, -4]]],
+    ['yes', 2, '', 'Орозбекова 39', [[-194, -216], [-182, -217], [-184, -243], [-196, -242]]],
+    ['apartments', 5, '', 'Эркиндик 43', [[182, 149], [182, 142], [181, 128], [181, 122], [170, 122], [171, 160], [242, 158], [241, 146]]],
+    ['retail', 1, '', '', [[103, 128], [107, 128], [106, 115], [102, 116]]],
+    ['yes', 3, '', 'Токтогула 110', [[-191, -109], [-177, -110], [-179, -131], [-192, -130]]],
+    ['retail', 1, '', 'Токтогула 95', [[58, -69], [62, -69], [61, -79], [57, -82], [42, -81], [42, -77], [57, -78]]],
+    ['yes', 6, '', 'Чуй 120', [[-304, 329], [-189, 324], [-185, 324], [-185, 314], [-188, 245], [-189, 213], [-193, 213], [-203, 213], [-199, 309], [-305, 314], [-304, 319]]],
+    ['yes', 2, '', 'Орозбекова 37а', [[-154, -216], [-145, -216], [-145, -226], [-155, -225]]],
+    ['yes', 2, '', 'Орозбекова 45', [[-189, -157], [-188, -142], [-181, -142], [-181, -157]]],
+    ['yes', 2, '', 'Орозбекова 43', [[-179, -161], [-179, -175], [-189, -175], [-192, -172], [-192, -163], [-188, -161]]],
+    ['yes', 10, '', 'Раззакова 56', [[-114, -142], [-92, -143], [-93, -162], [-115, -161]]],
+    ['yes', 3, '', 'Эркиндик 46/1', [[19, 246], [18, 230], [20, 230], [50, 229], [50, 241], [50, 244], [30, 245]]],
+    ['yes', 3, '', 'Раззакова 66', [[-125, 58], [-124, 81], [-106, 81], [-107, 58]]],
+    ['yes', 2, '', 'Орозбекова 51', [[-151, 38], [-152, 13], [-142, 12], [-141, 37]]],
+    ['yes', 3, '', 'Орозбекова 51', [[-183, 33], [-159, 31], [-162, -20], [-186, -19]]],
+    ['yes', 2, '', 'Эркиндик 31в', [[197, -208], [198, -218], [208, -217], [208, -208]]],
+    ['yes', 3, '', 'Токтогула 104', [[-122, -111], [-107, -112], [-108, -135], [-124, -134], [-123, -130], [-122, -113]]],
+    ['yes', 3, '', 'Токтогула 102', [[-122, -113], [-135, -112], [-136, -130], [-123, -130]]],
+    ['yes', 3, '', 'Токтогула 106', [[-135, -111], [-150, -110], [-150, -116], [-153, -115], [-154, -127], [-151, -127], [-152, -132], [-148, -132], [-148, -135], [-136, -136], [-136, -130]]],
+    ['yes', 3, '', 'Токтогула 106/1', [[-164, -107], [-166, -135], [-179, -134], [-179, -131], [-177, -110], [-177, -106]]],
+    ['yes', 2, '', 'Токтогула 110а', [[-158, -168], [-149, -168], [-149, -176], [-158, -176]]],
+    ['yes', 2, '', '', [[-156, -229], [-144, -229], [-145, -246], [-156, -246]]],
+    // по 2ГИС: две строящиеся 13-этажки между корпусом и ул. Токтогула (в OSM их ещё нет)
+    ['tower', 13, 'Бийик Курулуш', 'Раззакова 43', [[-46, -59], [-8, -59], [-8, -36], [-46, -36]]],
+    ['tower', 13, 'Бест апартментс', 'Раззакова 43 стр', [[-47, -85], [-10, -85], [-10, -64], [-47, -64]]],
+];
+const OSM_PITCH = [[-96, 45], [-98, 11], [-77, 10], [-76, 45]]; // футбольное поле через Раззакова
+const OSM_ROT = 2.3 * Math.PI / 180;
+const OSM_DX = 20.2, OSM_DY = -11.5; // западный фасад корпуса (−45 м в OSM) → −24.8 м в модели; середина по y
+function osmXY(p) {
+    const c = Math.cos(OSM_ROT), s = Math.sin(OSM_ROT);
+    return [Math.round((p[0] * c - p[1] * s + OSM_DX) * 10) / 10, Math.round((p[0] * s + p[1] * c + OSM_DY) * 10) / 10];
+}
+// улицы (оси) в координатах модели после поворота и сдвига
+const STR = { RZ: -39.75, TK: -104.5, ERW: 102.5, ERE: 165.5, KV: 175.5 };
+
 // ---- world.ts ----
 // ================= МИР: двор, деревья, горы, небо по времени суток =================
 // Солнце Бишкека (42.9° с.ш., 74.6° в.д., UTC+6): солнечный полдень ≈ 12:58 по местному времени
@@ -3822,21 +3916,22 @@ function sunPos(t) {
 }
 // ---------- ресурсы двора ----------
 const CITY = {
-    // [x0, x1, y0, y1] в координатах симуляции (x — восток, y — север), по карте OSM вокруг ул. Раззакова 51
-    roads: [[-44, -35.5, -300, 300, 'Раззакова', 'S'], [-300, 300, -97, -83, 'Токтогула', 'W'], [72, 79, -300, 300, 'Эркиндик', 'S'], [134, 141, -300, 300, 'Эркиндик', 'N'], [-300, 300, 131, 139, 'Киевская', 'E']],
-    walks: [[-48, -44, -300, 300], [-35.5, -31.3, -300, 300], [-300, 300, -100, -97], [-300, 300, -83, -79.5], [69, 72, -300, 300], [141, 144, -300, 300], [-300, 300, 128, 131], [-300, 300, 139, 142]],
-    blocks: [
-        [40, 58, -54, 7, 12, 0xd9ccb2, 'Дипакадемия МИД'], [44, 60, -62, -79, 7, 0xcbb89c], [29, 66, 37, 52, 13, 0xe6dac4, 'КГУ'], [-14, 8, 99, 124, 16, 0xe6dac4, 'КГУ'], [44, 66, 86, 104, 13, 0xe6dac4], [20, 54, -62, -77, 7, 0xd6cfc4],
-        [-84, -58, 8, 46, 12, 0xd8c7a8, 'Лицей №3'], [-66, -52, -34, 2, 15, 0xe8dcc0, 'Общежитие'], [-80, -62, -44, -74, 15, 0xb9c3c9], [-125, -95, 55, 95, 12, 0xd0bfa4], [-125, -95, -30, 20, 9, 0xcfc8bb],
-        [-28, 40, -108, -140, 16, 0xd4c6ae], [-80, -52, -106, -128, 9, 0xc9bfae], [150, 176, 40, 82, 12, 0xd6c9b4], [150, 172, -22, 22, 9, 0xc4cdd0], [148, 182, -58, -80, 10, 0xd2c3a8], [150, 180, 100, 125, 14, 0xcbbca4],
-        [-80, -50, 60, 120, 15, 0xd0c4ae], [60, 70, 145, 175, 10, 0xd8cbb4], [-20, 30, 146, 180, 18, 0xc9c0b0]
-    ],
-    field: [-29, 14, -76, -39],
+    // [x0, x1, y0, y1] в координатах симуляции (x — восток, y — север); оси улиц — STR в osm.ts (по OSM и 2ГИС)
+    roads: [[-44, -35.5, -300, 300, 'Раззакова', 'S'], [-300, 300, STR.TK - 7, STR.TK + 7, 'Токтогула', 'W'], [STR.ERW - 3.5, STR.ERW + 3.5, -300, 300, 'Эркиндик', 'S'], [STR.ERE - 3.5, STR.ERE + 3.5, -300, 300, 'Эркиндик', 'N'], [-300, 300, STR.KV - 4, STR.KV + 4, 'Киевская', 'E']],
+    walks: [[-48, -44, -300, 300], [-35.5, -31.3, -300, 300], [-300, 300, STR.TK - 10.5, STR.TK - 7], [-300, 300, STR.TK + 7, STR.TK + 10.5], [STR.ERW - 6.5, STR.ERW - 3.5, -300, 300], [STR.ERE + 3.5, STR.ERE + 6.5, -300, 300], [-300, 300, STR.KV - 7, STR.KV - 4], [-300, 300, STR.KV + 4, STR.KV + 7]],
+    // соседние здания: контур (polygon), bbox для деревьев и т. п.
+    blocks: OSM_RAW.map(([kind, fl, name, addr, poly]) => {
+        const P = poly.map(osmXY);
+        const xs = P.map(p => p[0]), ys = P.map(p => p[1]);
+        return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys), fl * 3.3, kind === 'tower' ? 0xc9cdd2 : kind === 'college' ? 0xd9ccb2 : name === 'КГУ' ? 0xe6dac4 : 0xd2c6b0, name, P, kind, addr];
+    }),
+    field: null,
 };
-// у части домов y0 > y1: коробка выходила вывернутой наизнанку и казалась недостроенной
-CITY.blocks.forEach(b => { if (b[0] > b[1])
-    [b[0], b[1]] = [b[1], b[0]]; if (b[2] > b[3])
-    [b[2], b[3]] = [b[3], b[2]]; });
+{
+    const P = OSM_PITCH.map(osmXY);
+    const xs = P.map(p => p[0]), ys = P.map(p => p[1]);
+    CITY.field = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+}
 const W = { lampMats: [], lights: [], flag: null, stars: null, mts: [], glass: [], amb: null, treeCrowns: [], grassMats: [] };
 const C = (h) => new THREE.Color(h);
 function seasonOf(doy) { const m = new Date(Date.UTC(2026, 0, doy)).getUTCMonth(); return m <= 1 || m === 11 ? 'winter' : m <= 3 ? 'spring' : m <= 7 ? 'summer' : m === 8 ? 'early' : 'autumn'; }
@@ -4620,22 +4715,22 @@ function buildTraffic() {
         return g;
     };
     // маршруты: Раззакова (на юг), Токтогула (на запад, 2 полосы), Эркиндик (юг/север), Киевская (на восток)
-    const R = [{ x: -40.5, y: 300, dx: 0, dy: -1, n: 5 }, { x: 300, y: -87, dx: -1, dy: 0, n: 6, stop: -5 }, { x: 300, y: -92.5, dx: -1, dy: 0, n: 5 }, { x: 75.5, y: 300, dx: 0, dy: -1, n: 4, stop: -40 }, { x: 137.5, y: -300, dx: 0, dy: 1, n: 4 }, { x: -300, y: 135, dx: 1, dy: 0, n: 3 }];
+    const R = [{ x: -40.5, y: 300, dx: 0, dy: -1, n: 5 }, { x: 300, y: STR.TK + 3, dx: -1, dy: 0, n: 6, stop: -5 }, { x: 300, y: STR.TK - 2.5, dx: -1, dy: 0, n: 5 }, { x: STR.ERW, y: 300, dx: 0, dy: -1, n: 4, stop: -40 }, { x: STR.ERE, y: -300, dx: 0, dy: 1, n: 4 }, { x: -300, y: STR.KV, dx: 1, dy: 0, n: 3 }];
     R.forEach((r, ri) => { for (let i = 0; i < r.n * 2; i++) {
         const bus = r.stop != null && i % 3 === 0;
         CARS.push({ g: mk(bus), bus, r, s: rr(0, 600), v: bus ? rr(8, 10) : rr(9, 14), stop: 0, stopped: false, active: true });
     } });
     // припаркованные машины вдоль Раззакова и у Дипакадемии
-    for (let y = -70; y < 120; y += rr(5.5, 9)) {
+    for (let y = -95; y < 165; y += rr(5.5, 9)) {
         if (Math.abs(y + 31.4) < 6 || Math.abs(y - 30.2) < 6)
             continue;
         const g = mk(false);
         g.position.set(-43, OUTZ + 0.02, -y);
         scene.add(g);
     }
-    for (let y = -48; y < 4; y += rr(5, 7)) {
+    for (let y = -40; y < 4; y += rr(5, 7)) {
         const g = mk(false);
-        g.position.set(64.5, OUTZ + 0.02, -y);
+        g.position.set(60, OUTZ + 0.02, -y);
         g.rotation.y = Math.PI / 2 + (chance(0.5) ? Math.PI : 0);
     }
     // остановка маршруток на Токтогула
@@ -4648,7 +4743,7 @@ function buildTraffic() {
     benchS.position.set(-0.45, 0.46, 0);
     shelter.add(roofS, backS, benchS);
     [-1.9, 1.9].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4), new THREE.MeshStandardMaterial({ color: 0x333 })); p.position.set(-0.7, 1.2, z); shelter.add(p); });
-    shelter.position.set(-5, OUTZ, 81.6);
+    shelter.position.set(-5, OUTZ, -(STR.TK + 9.2));
     shelter.rotation.y = Math.PI / 2;
     scene.add(shelter);
     shelter.traverse((o) => { if (o.isMesh)
@@ -5024,8 +5119,8 @@ function buildCity() {
     CITY.walks.forEach(w => flat(w[0], w[1], w[2], w[3], 0xa9a49a, 0.022));
     CITY.roads.forEach((r, i) => flat(r[0], r[1], r[2], r[3], 0x3a3d41, 0.026 + i * 0.001));
     // аллея бульвара Эркиндик: газон + центральная дорожка
-    flat(79, 134, -300, 300, 0x7f8a4f, 0.018);
-    flat(104, 110, -300, 300, 0xb3a98f, 0.024);
+    flat(STR.ERW + 3.5, STR.ERE - 3.5, -300, 300, 0x7f8a4f, 0.018);
+    flat((STR.ERW + STR.ERE) / 2 - 3, (STR.ERW + STR.ERE) / 2 + 3, -300, 300, 0xb3a98f, 0.024);
     // разметка
     const dashes = [];
     CITY.roads.forEach(r => { const vert = r[1] - r[0] < r[3] - r[2]; const c = vert ? (r[0] + r[1]) / 2 : (r[2] + r[3]) / 2; for (let u = -296; u < 296; u += 6) {
@@ -5045,8 +5140,8 @@ function buildCity() {
         zebra.push([vert ? x + k * 0.9 : x, vert ? y : y + k * 0.9, vert]); };
     zAt(-39.75, -31.4, true);
     zAt(-39.75, 30.2, true);
-    zAt(-25, -90, false);
-    zAt(75.5, -40, true);
+    zAt(-25, STR.TK, false);
+    zAt(STR.ERW, -40, true);
     const zm = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.5, 3.2), new THREE.MeshBasicMaterial({ color: 0xf0eee8 }), zebra.length);
     zebra.forEach(([x, y, v], i) => { m4.makeRotationX(-Math.PI / 2); if (v)
         m4.premultiply(r4.makeRotationY(Math.PI / 2)); m4.setPosition(x, OUTZ + 0.045, -y); zm.setMatrixAt(i, m4); });
@@ -5055,70 +5150,83 @@ function buildCity() {
     const STYLES = ['panel', 'brick', 'plaster', 'stalin', 'modern'];
     const ROOFS = [0x3d5a4a, 0x7a3b2e, 0x4a4f57, 0x2f4d6b, 0x6b5a48];
     CITY.blocks.forEach((b, bi) => {
-        const [x0, x1, y0, y1, h, col, name] = b;
+        const [x0, x1, y0, y1, h, col, name, P, kind] = b;
         if (name === 'Общежитие')
             return; // строится отдельно (campus.ts)
-        const fl = Math.max(1, Math.round(h / 3.2));
-        const style = name === 'КГУ' || name === 'Лицей №3' ? 'stalin' : name === 'Дипакадемия МИД' ? 'modern' : STYLES[bi % STYLES.length];
-        const ft = boxTex(fl, col, style, bi + 3);
-        const side = (len) => {
-            const map = ft.map.clone(), em = ft.em.clone();
-            map.needsUpdate = em.needsUpdate = true;
-            map.repeat.set(Math.max(1, Math.round(len / 7)), fl);
-            em.repeat.copy(map.repeat);
-            const m = new THREE.MeshStandardMaterial({ map, roughness: style === 'modern' ? 0.45 : 0.9, metalness: style === 'modern' ? 0.2 : 0 });
-            m.userData.em = em;
-            return m;
-        };
-        const top = new THREE.MeshStandardMaterial({ color: 0x8b8f93, roughness: 0.95 });
-        const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, y1 - y0), [side(y1 - y0), side(y1 - y0), top, top, side(x1 - x0), side(x1 - x0)]);
-        m.position.set((x0 + x1) / 2, OUTZ + h / 2, -(y0 + y1) / 2);
-        m.castShadow = m.receiveShadow = true;
-        scene.add(m);
+        const fl = Math.max(1, Math.round(h / 3.3));
+        const kgu = name === 'КГУ';
+        const style = kgu ? 'plaster' : kind === 'tower' ? 'modern' : name === 'КГУ' || kind === 'school' ? 'stalin' : kind === 'college' ? 'modern' : kind === 'apartments' ? (fl >= 5 ? 'panel' : 'brick') : STYLES[bi % STYLES.length];
+        const ft = boxTex(fl, kgu ? 0xe4d3ae : col, style, bi + 3);
+        // стены: развёртка по периметру, одна текстура «окно × этаж» на каждые 3,5 м и 3,3 м
+        const pos = [], uv = [], n = P.length;
+        let u = 0;
+        for (let i = 0; i < n; i++) {
+            const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]);
+            if (L < 0.05)
+                continue;
+            const u0 = u / 3.5, u1 = (u + L) / 3.5;
+            u += L;
+            pos.push(a[0], OUTZ, -a[1], c[0], OUTZ, -c[1], c[0], OUTZ + h, -c[1], a[0], OUTZ, -a[1], c[0], OUTZ + h, -c[1], a[0], OUTZ + h, -a[1]);
+            uv.push(u0, 0, u1, 0, u1, fl, u0, 0, u1, fl, u0, fl);
+        }
+        const wg = new THREE.BufferGeometry();
+        wg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        wg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        wg.computeVertexNormals();
+        const map = ft.map, em = ft.em;
+        map.needsUpdate = em.needsUpdate = true;
+        const wm = new THREE.MeshStandardMaterial({ map, roughness: style === 'modern' ? 0.45 : 0.9, metalness: style === 'modern' ? 0.2 : 0, side: THREE.DoubleSide });
+        wm.userData.em = em;
+        const wall = new THREE.Mesh(wg, wm);
+        wall.castShadow = wall.receiveShadow = true;
+        scene.add(wall);
         W.cityGlass = W.cityGlass || [];
-        m.material.forEach(mm => { if (mm.map)
-            W.cityGlass.push(mm); });
-        // крыша: у части домов скатная (жесть), у остальных — парапет
-        if (style !== 'modern' && style !== 'panel' && bi % 3 !== 0) {
-            const rf = new THREE.Mesh(new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1).rotateY(Math.PI / 4), new THREE.MeshStandardMaterial({ color: ROOFS[bi % ROOFS.length], roughness: 0.6, metalness: 0.3, flatShading: true }));
-            rf.scale.set(x1 - x0 + 0.8, Math.min(4, (Math.min(x1 - x0, y1 - y0)) * 0.22), y1 - y0 + 0.8);
+        W.cityGlass.push(wm);
+        // корпуса КГУ (2-й, 4-й, 5-й): как наш — бежевая штукатурка, коричневый цоколь и скатная коричневая крыша
+        if (kgu) {
+            const pl = [];
+            for (let i = 0; i < n; i++) {
+                const a = P[i], c = P[(i + 1) % n];
+                pl.push(a[0], OUTZ, -a[1], c[0], OUTZ, -c[1], c[0], OUTZ + 1.0, -c[1], a[0], OUTZ, -a[1], c[0], OUTZ + 1.0, -c[1], a[0], OUTZ + 1.0, -a[1]);
+            }
+            const plg = new THREE.BufferGeometry();
+            plg.setAttribute('position', new THREE.Float32BufferAttribute(pl, 3));
+            plg.computeVertexNormals();
+            const plm = new THREE.Mesh(plg, new THREE.MeshStandardMaterial({ color: 0x4a3328, roughness: 0.9, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
+            scene.add(plm);
+            const rf = new THREE.Mesh(new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1).rotateY(Math.PI / 4), new THREE.MeshStandardMaterial({ color: 0x5a3a2a, roughness: 0.6, metalness: 0.25, flatShading: true }));
+            rf.scale.set(x1 - x0 + 1.0, Math.min(4.5, Math.min(x1 - x0, y1 - y0) * 0.25), y1 - y0 + 1.0);
             rf.position.set((x0 + x1) / 2, OUTZ + h + rf.scale.y / 2, -(y0 + y1) / 2);
             rf.castShadow = true;
             scene.add(rf);
+            return;
         }
-        else {
-            const par = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0 + 0.3, 0.7, y1 - y0 + 0.3), new THREE.MeshStandardMaterial({ color: new THREE.Color(col).multiplyScalar(0.85), roughness: 0.9 }));
-            par.position.set((x0 + x1) / 2, OUTZ + h + 0.1, -(y0 + y1) / 2);
-            scene.add(par);
-            const box = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 3), top);
-            box.position.set(x0 + (x1 - x0) * 0.3, OUTZ + h + 1.1, -(y0 + (y1 - y0) * 0.6));
+        // плоская крыша с парапетом
+        const shape = new THREE.Shape(P.map(p => new THREE.Vector2(p[0], p[1])));
+        const roofG = new THREE.ShapeGeometry(shape);
+        roofG.rotateX(-Math.PI / 2);
+        const roof = new THREE.Mesh(roofG, new THREE.MeshStandardMaterial({ color: 0x8b8f93, roughness: 0.95, side: THREE.DoubleSide }));
+        roof.position.y = OUTZ + h;
+        roof.receiveShadow = true;
+        scene.add(roof);
+        const ppos = [];
+        for (let i = 0; i < n; i++) {
+            const a = P[i], c = P[(i + 1) % n];
+            ppos.push(a[0], OUTZ + h, -a[1], c[0], OUTZ + h, -c[1], c[0], OUTZ + h + 0.6, -c[1], a[0], OUTZ + h, -a[1], c[0], OUTZ + h + 0.6, -c[1], a[0], OUTZ + h + 0.6, -a[1]);
+        }
+        const pg = new THREE.BufferGeometry();
+        pg.setAttribute('position', new THREE.Float32BufferAttribute(ppos, 3));
+        pg.computeVertexNormals();
+        scene.add(new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ color: new THREE.Color(col).multiplyScalar(0.85), roughness: 0.9, side: THREE.DoubleSide })));
+        if (x1 - x0 > 12 && y1 - y0 > 12) {
+            const box = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 3), new THREE.MeshStandardMaterial({ color: 0x8b8f93, roughness: 0.95 }));
+            const cx0 = P.reduce((s, p) => s + p[0], 0) / n, cy0 = P.reduce((s, p) => s + p[1], 0) / n;
+            box.position.set(cx0, OUTZ + h + 1.1, -cy0);
             box.castShadow = true;
             scene.add(box);
         }
-        // магазины на первом этаже со стороны ближайшей большой улицы
-        if (!name && style !== 'modern') {
-            const near = CITY.roads.map(r => ({ r, d: Math.max(r[0] - x1, x0 - r[1], 0) + Math.max(r[2] - y1, y0 - r[3], 0) })).sort((a, b) => a.d - b.d)[0];
-            if (near && near.d < 30) {
-                const r = near.r, vertical = r[1] - r[0] < r[3] - r[2];
-                const st = shopTex(bi);
-                const len = vertical ? y1 - y0 : x1 - x0;
-                st.repeat.set(Math.max(1, Math.round(len / 10)), 1);
-                const sm = new THREE.Mesh(new THREE.PlaneGeometry(len, 3.2), new THREE.MeshStandardMaterial({ map: st, roughness: 0.7 }));
-                if (vertical) {
-                    const east = r[0] > x1;
-                    sm.position.set(east ? x1 + 0.03 : x0 - 0.03, OUTZ + 1.6, -(y0 + y1) / 2);
-                    sm.rotation.y = east ? Math.PI / 2 : -Math.PI / 2;
-                }
-                else {
-                    const north = r[2] > y1;
-                    sm.position.set((x0 + x1) / 2, OUTZ + 1.6, north ? -y1 - 0.03 : -y0 + 0.03);
-                    sm.rotation.y = north ? 0 : Math.PI;
-                }
-                scene.add(sm);
-            }
-        }
     });
-    // спортплощадка к югу от корпуса
+    // футбольное поле через ул. Раззакова
     const [fx0, fx1, fy0, fy1] = CITY.field;
     const fc = document.createElement('canvas');
     fc.width = 256;
@@ -5144,15 +5252,21 @@ function buildCity() {
     g.strokeRect(68, 444, 120, 56);
     const ft = new THREE.CanvasTexture(fc);
     ft.encoding = THREE.sRGBEncoding;
-    const field = new THREE.Mesh(new THREE.PlaneGeometry(fx1 - fx0, fy1 - fy0), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.9 }));
+    const longY = fy1 - fy0 > fx1 - fx0;
+    const field = new THREE.Mesh(longY ? new THREE.PlaneGeometry(fx1 - fx0, fy1 - fy0) : new THREE.PlaneGeometry(fy1 - fy0, fx1 - fx0), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.9 }));
     field.rotation.x = -Math.PI / 2;
-    field.rotation.z = Math.PI / 2;
-    field.geometry = new THREE.PlaneGeometry(fy1 - fy0, fx1 - fx0);
+    if (!longY)
+        field.rotation.z = Math.PI / 2;
     field.position.set((fx0 + fx1) / 2, OUTZ + 0.03, -(fy0 + fy1) / 2);
     field.receiveShadow = true;
     scene.add(field);
     const goalM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
-    [fx0 + 1, fx1 - 1].forEach(x => { const gl = new THREE.Group(); [-1.5, 1.5].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2), goalM); p.position.set(0, 1, z); gl.add(p); }); const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), goalM); cb.rotation.x = Math.PI / 2; cb.position.y = 2; gl.add(cb); gl.position.set(x, OUTZ, -(fy0 + fy1) / 2); gl.traverse(o => o.castShadow = true); scene.add(gl); });
+    (longY ? [fy0 + 1, fy1 - 1] : [fx0 + 1, fx1 - 1]).forEach(v => { const gl = new THREE.Group(); [-1.5, 1.5].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2), goalM); p.position.set(0, 1, z); gl.add(p); }); const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), goalM); cb.rotation.x = Math.PI / 2; cb.position.y = 2; gl.add(cb); if (longY) {
+        gl.rotation.y = Math.PI / 2;
+        gl.position.set((fx0 + fx1) / 2, OUTZ, -v);
+    }
+    else
+        gl.position.set(v, OUTZ, -(fy0 + fy1) / 2); gl.traverse(o => o.castShadow = true); scene.add(gl); });
     // таблички улиц
     const plate = (text, x, y, rotY) => {
         const c = document.createElement('canvas');
@@ -5180,11 +5294,11 @@ function buildCity() {
         gr.rotation.y = rotY;
         scene.add(gr);
     };
-    plate('ул. Раззакова', -34.3, -79.2, Math.PI / 2);
-    plate('ул. Токтогула', -32.5, -81.8, 0);
-    plate('бул. Эркиндик', 70.5, -81.5, Math.PI / 2);
+    plate('ул. Раззакова', -34.3, STR.TK + 10.8, Math.PI / 2);
+    plate('ул. Токтогула', -32.5, STR.TK + 8.2, 0);
+    plate('бул. Эркиндик', STR.ERW - 5, STR.TK + 8.5, Math.PI / 2);
     plate('ул. Раззакова 51', -32.2, -30.8, Math.PI / 2);
-    plate('ул. Киевская', -34.3, 129.5, 0);
+    plate('ул. Киевская', -34.3, STR.KV - 5.5, 0);
 }
 
 // ---- events.ts ----
@@ -6898,7 +7012,7 @@ function sndFrame(dt) {
     const crowd = Math.min(1, chat / 14) * near;
     SND.voices.forEach((v, i) => { v.g.gain.setTargetAtTime(crowd * (0.11 + i * 0.015), SND.C.currentTime, 0.4); });
     const el = sunPos(simT).el;
-    const roadNear = Math.max(0, 1 - Math.min(Math.abs(X - -36), Math.abs(Y - -90)) / 45);
+    const roadNear = Math.max(0, 1 - Math.min(Math.abs(X - -36), Math.abs(Y - STR.TK)) / 45);
     SND.road.gain.setTargetAtTime((0.05 + roadNear * 0.08) * (simT > 360 && simT < 1380 ? 1 : 0.3) * Math.min(1, near * 1.5), SND.C.currentTime, 0.6);
     SND.keyAcc += dt * typing * 2.2 * near;
     while (SND.keyAcc > 1) {
@@ -7600,6 +7714,12 @@ function designTex() {
         d[k * 4 + 2] = B;
         d[k * 4 + 3] = r.kind === 'corridor' ? 128 : r.kind === 'pc' ? 200 : r.kind === 'wc' ? 90 : 255;
     }
+    // лестничные клетки: без цветной полосы и панелей (полоса на 1,1 м над площадкой резала лестничный марш по диагонали)
+    STAIRS.forEach(st => { if (st.f < 1)
+        return; const b = st.bb, m = 0.8; for (let j = cy(b[1] - m); j <= cy(b[3] + m); j++)
+        for (let i = cx(b[0] - m); i <= cx(b[2] + m); i++)
+            if (i >= 0 && j >= 0 && i < SNX && j < SNY)
+                d[(j * SNX + i) * 4 + 3] = 0; });
     // двери (-2) и тонкие стены: берём ближайшее помещение, чтобы цвет не «рвался» у проёмов
     const cd = new Uint8Array(n * 4);
     for (let k = 0; k < n; k++)
