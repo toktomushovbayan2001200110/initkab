@@ -24,7 +24,8 @@ function designTex() {
 const GLSL_HEAD = `uniform sampler2D uRoom; uniform sampler2D uCore; uniform vec4 uGrid; uniform float uFloor; varying vec3 vWP; varying vec3 vWN;
 float coreAt(vec2 p){ vec2 uv = (p - uGrid.xy) / uGrid.zw; if (uv.x < 0. || uv.y < 0. || uv.x > 1. || uv.y > 1.) return 0.; return texture2D(uCore, uv).r; }
 vec4 roomAtP(vec2 p){ vec2 uv = (p - uGrid.xy) / uGrid.zw; if (uv.x < 0. || uv.y < 0. || uv.x > 1. || uv.y > 1.) return vec4(0.); return texture2D(uRoom, uv); }
-float hash2(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }`;
+float hash2(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float gLed = 0.0;`;
 const GLSL = {
   wall: `
   { float h = vWP.y - uFloor;
@@ -49,7 +50,7 @@ const GLSL = {
       if (r.a < 0.01) r = roomAtP(p + vec2(0.2, 0.0));
       if (r.a > 0.01) {
         vec3 c;
-        if (abs(r.a - 0.502) < 0.03) { vec2 q = fract(p / 0.6); float seam = step(q.x, 0.012) + step(q.y, 0.012); float n = hash2(floor(p / 0.6)); c = vec3(0.60, 0.60, 0.585) * (0.92 + 0.08 * n); c = mix(c, vec3(0.38), min(1., seam) * 0.55); }
+        if (abs(r.a - 0.502) < 0.03) { /* коридор: серый ламинат под дерево, как на фото */ float row = floor(p.x / 0.2); float off = fract(row * 0.618) * 1.3; float col = floor((p.y + off) / 1.3); float n = hash2(vec2(row, col)); float seam = step(fract(p.x / 0.2), 0.03) + step(fract((p.y + off) / 1.3), 0.004); float grain = 0.5 + 0.5 * sin(p.y * 38.0 + sin(p.x * 11.0 + row) * 2.5); c = vec3(0.36, 0.35, 0.33) * (0.82 + 0.26 * n) * (0.95 + 0.05 * grain); c = mix(c, c * 0.6, min(1., seam)); }
         else if (abs(r.a - 0.784) < 0.03) { vec2 cell = floor(p / 0.5); float n = hash2(cell); float ck = mod(cell.x + cell.y, 2.); c = vec3(0.105, 0.13, 0.175) * (0.88 + 0.14 * n + ck * 0.08); }
         else if (r.a < 0.4) { vec2 q = fract(p / 0.3); float seam = step(q.x, 0.03) + step(q.y, 0.03); c = mix(vec3(0.78, 0.82, 0.83), vec3(0.5), min(1., seam) * 0.5); }
         else { float row = floor(p.y / 0.19); float off = fract(row * 0.37) * 1.2; float col = floor((p.x + off) / 1.2); float n = hash2(vec2(row, col));
@@ -59,7 +60,7 @@ const GLSL = {
       }
     } }`,
   ceil: `
-  { float h = vWP.y - uFloor; if (vWN.y < -0.6 && h > 2.4 && h < 3.8) { vec2 p = vec2(vWP.x, -vWP.z); vec4 r = roomAtP(p); if (r.a > 0.01) { vec2 q = fract(p / 0.6); float seam = step(q.x, 0.01) + step(q.y, 0.01); diffuseColor.rgb = mix(vec3(0.88), vec3(0.62), min(1., seam) * 0.5); } } }`,
+  { float h = vWP.y - uFloor; if (vWN.y < -0.6 && h > 2.4 && h < 3.8) { vec2 p = vec2(vWP.x, -vWP.z); vec4 r = roomAtP(p); if (r.a > 0.01) { vec2 q = fract(p / 0.6); float seam = step(q.x, 0.01) + step(q.y, 0.01); diffuseColor.rgb = mix(vec3(0.88), vec3(0.62), min(1., seam) * 0.5); vec2 cell = floor(p / 0.6); if (mod(cell.x, 4.) == 1. && mod(cell.y, 3.) == 1.) { vec2 qq = fract(p / 0.6); if (qq.x > 0.04 && qq.x < 0.96 && qq.y > 0.04 && qq.y < 0.96) { diffuseColor.rgb = vec3(1.0); gLed = 1.0; } } } } }`,
 };
 function designMat(mat, kind) {
   const m = mat.clone(); m.name = (mat.name || '') + '#' + kind;
@@ -67,7 +68,8 @@ function designMat(mat, kind) {
     sh.uniforms.uRoom = { value: DTEX }; sh.uniforms.uCore = { value: CTEX }; sh.uniforms.uGrid = { value: new THREE.Vector4(SX0, SY0, SNX * SR, SNY * SR) }; sh.uniforms.uFloor = { value: FZ[2] };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + GLSL_HEAD).replace('#include <map_fragment>', '#include <map_fragment>\n' + GLSL[kind]);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + GLSL_HEAD).replace('#include <map_fragment>', '#include <map_fragment>\n' + GLSL[kind]).replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += gLed * vec3(0.95, 0.97, 1.0) * uLed;');
+    sh.uniforms.uLed = { value: 1.0 }; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uLed;');
   };
   m.customProgramCacheKey = () => 'design-' + kind;
   return m;
