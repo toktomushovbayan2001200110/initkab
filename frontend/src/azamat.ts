@@ -93,7 +93,9 @@ function azLoad() {
   const GL = (THREE as any).GLTFLoader; if (!GL) return;
   const ids = ([] as string[]).concat(...Object.values(AZ_CAST));
   ids.forEach(id => {
-    fetch(AZ_BASE + id + '.glb').then(r => { if (!r.ok) throw new Error(r.status + ''); return r.arrayBuffer(); })
+    // GLB по fetch; если хостинг .glb не отдаёт (артефакт), берём ту же модель из npc/<id>.js (base64)
+    const viaJs = () => new Promise<ArrayBuffer>((ok, bad) => { const W: any = window; W.NPC_GLB = W.NPC_GLB || {}; const s = document.createElement('script'); s.src = AZ_BASE + id + '.js'; s.onload = () => { const b64 = W.NPC_GLB[id]; if (!b64) return bad(new Error('no data')); const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); delete W.NPC_GLB[id]; ok(u.buffer); }; s.onerror = () => bad(new Error('script')); document.head.appendChild(s); });
+    fetch(AZ_BASE + id + '.glb').then(r => { if (!r.ok) throw new Error(r.status + ''); return r.arrayBuffer(); }).catch(() => viaJs())
       .then(buf => new GL().parse(buf, '', (g: any) => { const T = azPrep(g.scene); T.id = id; azPrepMats(g.scene); AZ.tpl[id] = T; AZ.ready = true; }, (e: any) => console.warn('персонаж ' + id, e)))
       .catch(e => console.warn('персонаж ' + id + ' не загрузился', e));
   });

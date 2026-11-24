@@ -37,4 +37,6 @@ console.log(`index.html: ${(html.length / 1e6).toFixed(2)} МБ, модулей:
 for (const out of ['../campus/static/campus/npc', 'build/npc']) {
   mkdirSync(join(root, out), { recursive: true });
   for (const f of readdirSync(join(root, 'data/npc'))) if (f.endsWith('.glb')) copyFileSync(join(root, 'data/npc', f), join(root, out, f));
+  // артефакт не раздаёт .glb — рядом кладём ту же модель как скрипт с base64
+  if (out === 'build/npc') for (const f of readdirSync(join(root, 'data/npc'))) if (f.endsWith('.glb')) { const id = f.slice(0, -4); writeFileSync(join(root, out, id + '.js'), `(window.NPC_GLB=window.NPC_GLB||{})[${JSON.stringify(id)}]=${JSON.stringify(readFileSync(join(root, 'data/npc', f)).toString('base64'))};`); }
 }
